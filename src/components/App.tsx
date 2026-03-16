@@ -8,6 +8,7 @@ import { Board } from './Board';
 import { ScorePanel } from './ScorePanel';
 import { GameControls } from './GameControls';
 import { WinBanner } from './WinBanner';
+import { MusicPlayer } from './MusicPlayer';
 import { useAI } from '../hooks/useAI';
 import { useOnlineGame } from '../hooks/useOnlineGame';
 import { Player } from '../lib/gameLogic';
@@ -100,6 +101,9 @@ function GameScreen() {
           onNewGame={newGame}
         />
       )}
+
+      {/* Music player — floating bottom-right */}
+      <MusicPlayer />
     </motion.div>
   );
 }

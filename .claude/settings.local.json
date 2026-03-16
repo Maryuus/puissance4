@@ -4,7 +4,16 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run:*)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(git branch:*)",
+      "Bash(gh:*)",
+      "Bash(npx vercel:*)",
+      "Bash(vercel whoami:*)",
+      "Bash(vercel:*)",
+      "Bash(supabase:*)",
+      "Bash(curl:*)",
+      "Bash(sudo mv:*)",
+      "Bash(git add:*)"
     ]
   }
 }

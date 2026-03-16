@@ -1053,3 +1053,112 @@ body {
   outline: 2px solid var(--btn-primary);
   outline-offset: 2px;
 }
+
+/* ===== MUSIC PLAYER ===== */
+.music-player-wrapper {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.music-toggle-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.music-toggle-btn:hover {
+  border-color: var(--btn-primary);
+  box-shadow: 0 4px 16px rgba(59,130,246,0.3);
+}
+
+.music-toggle-btn.music-active {
+  border-color: #34d399;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.4);
+}
+
+.music-playing-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #34d399;
+  animation: musicPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes musicPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.music-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  width: 280px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.music-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.music-close-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.65rem;
+  transition: background 0.15s;
+}
+
+.music-close-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.music-input-area {
+  color: var(--text-primary);
+}
+
+.music-player-area {
+  color: var(--text-primary);
+}
+
+@media (max-width: 400px) {
+  .music-panel {
+    width: 240px;
+  }
+  .music-player-wrapper {
+    bottom: 0.75rem;
+    right: 0.75rem;
+  }
+}

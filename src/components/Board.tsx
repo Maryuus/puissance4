@@ -54,6 +54,19 @@ export function Board() {
     }
   }, [isActive, mode, board, handleOnlineMove, handleColumnClick]);
 
+  // Fix hover flicker: only clear hover if the leaving column is still active
+  const handleHoverEnter = useCallback((col: number) => {
+    setHoveredColumn(col);
+  }, [setHoveredColumn]);
+
+  const handleHoverLeave = useCallback((col: number) => {
+    // Only clear if this column is still the hovered one
+    // This prevents the flicker when moving quickly between columns
+    if (useGameStore.getState().hoveredColumn === col) {
+      setHoveredColumn(null);
+    }
+  }, [setHoveredColumn]);
+
   // Keyboard support
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -99,7 +112,8 @@ export function Board() {
               winningCells={winningCells}
               lastMoveRow={lastMove?.col === col ? lastMove.row : null}
               onClick={handleClick}
-              onHover={setHoveredColumn}
+              onHoverEnter={handleHoverEnter}
+              onHoverLeave={handleHoverLeave}
               ghostRow={ghostRow}
             />
           );

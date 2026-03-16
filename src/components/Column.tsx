@@ -12,7 +12,8 @@ interface ColumnProps {
   winningCells: [number, number][];
   lastMoveRow: number | null;
   onClick: (col: number) => void;
-  onHover: (col: number | null) => void;
+  onHoverEnter: (col: number) => void;
+  onHoverLeave: (col: number) => void;
   ghostRow: number | null;
 }
 
@@ -25,7 +26,8 @@ export function Column({
   winningCells,
   lastMoveRow,
   onClick,
-  onHover,
+  onHoverEnter,
+  onHoverLeave,
   ghostRow,
 }: ColumnProps) {
   const winSet = new Set(winningCells.filter(([, c]) => c === col).map(([r]) => r));
@@ -34,23 +36,23 @@ export function Column({
     <motion.div
       className={`column ${isActive ? 'cursor-pointer' : 'cursor-default'}`}
       onClick={() => isActive && onClick(col)}
-      onMouseEnter={() => isActive && onHover(col)}
-      onMouseLeave={() => onHover(null)}
-      onTouchStart={() => isActive && onHover(col)}
+      onMouseEnter={() => isActive && onHoverEnter(col)}
+      onMouseLeave={() => onHoverLeave(col)}
+      onTouchStart={() => isActive && onHoverEnter(col)}
       whileHover={isActive ? { scale: 1.02 } : {}}
       whileTap={isActive ? { scale: 0.98 } : {}}
     >
       {/* Column hover indicator */}
       {isActive && (
         <motion.div
-          className={`column-indicator ${isHovered ? 'opacity-100' : 'opacity-0'}`}
+          className="column-indicator"
           style={{
             backgroundColor: currentPlayer === 1
               ? 'rgba(239, 68, 68, 0.15)'
               : 'rgba(250, 204, 21, 0.15)',
           }}
           animate={{ opacity: isHovered ? 1 : 0 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: 0.12 }}
         />
       )}
 

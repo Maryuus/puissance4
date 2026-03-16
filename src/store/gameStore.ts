@@ -141,8 +141,10 @@ export const useGameStore = create<GameState>()(
         set({ theme });
         if (theme === 'dark') {
           document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
         } else {
           document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
         }
       },
       toggleTheme: () => {
@@ -332,8 +334,10 @@ export const useGameStore = create<GameState>()(
 const storedTheme = useGameStore.getState().theme;
 if (storedTheme === 'light') {
   document.documentElement.classList.remove('dark');
+  document.documentElement.classList.add('light');
 } else {
   document.documentElement.classList.add('dark');
+  document.documentElement.classList.remove('light');
 }
 
 // Helper type for board cells (re-export for components)

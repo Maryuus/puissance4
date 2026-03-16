@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import { Difficulty } from '../lib/minimax';
@@ -13,22 +14,22 @@ interface DifficultyOption {
 const difficulties: DifficultyOption[] = [
   {
     value: 'easy',
-    label: 'Easy',
-    description: 'Random moves, great for beginners',
+    label: 'Facile',
+    description: 'Moves aléatoires, parfait pour débuter',
     emoji: '😊',
     color: 'difficulty-easy',
   },
   {
     value: 'medium',
-    label: 'Medium',
-    description: 'Minimax depth 4, a fair challenge',
+    label: 'Moyen',
+    description: 'Minimax profondeur 4, un vrai défi',
     emoji: '🤔',
     color: 'difficulty-medium',
   },
   {
     value: 'hard',
-    label: 'Hard',
-    description: 'Alpha-beta depth 7, very strong AI',
+    label: 'Difficile',
+    description: 'Alpha-beta profondeur 7, très fort',
     emoji: '🤖',
     color: 'difficulty-hard',
   },
@@ -41,10 +42,15 @@ interface DifficultyPickerProps {
 
 export function DifficultyPicker({ onSelect, onBack }: DifficultyPickerProps) {
   const { aiDifficulty, setAIDifficulty } = useGameStore();
+  const [selected, setSelected] = useState<Difficulty>(aiDifficulty);
 
-  const handleSelect = (difficulty: Difficulty) => {
+  const handleCardClick = (difficulty: Difficulty) => {
+    setSelected(difficulty);
     setAIDifficulty(difficulty);
-    onSelect(difficulty);
+  };
+
+  const handleStart = () => {
+    onSelect(selected);
   };
 
   return (
@@ -61,7 +67,7 @@ export function DifficultyPicker({ onSelect, onBack }: DifficultyPickerProps) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        Choose Difficulty
+        Choisir la difficulté
       </motion.h2>
       <motion.p
         className="setup-subtitle"
@@ -69,15 +75,15 @@ export function DifficultyPicker({ onSelect, onBack }: DifficultyPickerProps) {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        How hard do you want the AI to be?
+        Sélectionne un niveau puis lance la partie
       </motion.p>
 
       <div className="difficulty-options">
         {difficulties.map((option, index) => (
           <motion.button
             key={option.value}
-            className={`difficulty-card ${option.color} ${aiDifficulty === option.value ? 'selected' : ''}`}
-            onClick={() => handleSelect(option.value)}
+            className={`difficulty-card ${option.color} ${selected === option.value ? 'selected' : ''}`}
+            onClick={() => handleCardClick(option.value)}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 + index * 0.1, type: 'spring', stiffness: 200 }}
@@ -87,7 +93,7 @@ export function DifficultyPicker({ onSelect, onBack }: DifficultyPickerProps) {
             <span className="text-3xl mb-2">{option.emoji}</span>
             <span className="font-bold text-lg">{option.label}</span>
             <span className="text-xs opacity-70 text-center">{option.description}</span>
-            {aiDifficulty === option.value && (
+            {selected === option.value && (
               <motion.div
                 className="selected-indicator"
                 layoutId="difficulty-selected"
@@ -98,16 +104,29 @@ export function DifficultyPicker({ onSelect, onBack }: DifficultyPickerProps) {
         ))}
       </div>
 
-      <motion.button
-        className="btn btn-ghost mt-4"
-        onClick={onBack}
+      <motion.div
+        className="flex gap-3 mt-6 w-full"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        whileTap={{ scale: 0.97 }}
       >
-        ← Back
-      </motion.button>
+        <button
+          type="button"
+          className="btn btn-ghost flex-1"
+          onClick={onBack}
+        >
+          ← Retour
+        </button>
+        <motion.button
+          type="button"
+          className="btn btn-primary flex-2"
+          onClick={handleStart}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+        >
+          Jouer →
+        </motion.button>
+      </motion.div>
     </motion.div>
   );
 }
