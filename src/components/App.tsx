@@ -170,82 +170,50 @@ export function App() {
 
   return (
     <div className="app-root">
-      <AnimatePresence mode="wait">
-        {screen === 'menu' && (
+      {/* Non-game screens with animated transitions */}
+      <AnimatePresence>
+        {screen !== 'game' && (
           <motion.div
-            key="menu"
+            key={screen}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.15 }}
             className="screen-wrapper"
+            style={{ position: 'absolute', inset: 0 }}
           >
-            <MainMenu onSelectMode={handleSelectMode} />
-          </motion.div>
-        )}
-
-        {screen === 'playerSetup' && (
-          <motion.div
-            key="playerSetup"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="screen-wrapper"
-          >
-            <PlayerSetup
-              mode={mode as 'local' | 'ai'}
-              onStart={handlePlayerSetupDone}
-              onBack={handleBack}
-            />
-          </motion.div>
-        )}
-
-        {screen === 'difficultyPicker' && (
-          <motion.div
-            key="difficulty"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="screen-wrapper"
-          >
-            <DifficultyPicker
-              onSelect={handleDifficultySelected}
-              onBack={handleBack}
-            />
-          </motion.div>
-        )}
-
-        {screen === 'onlineSetup' && (
-          <motion.div
-            key="onlineSetup"
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -50 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="screen-wrapper"
-          >
-            <OnlineSetup
-              onJoined={handleOnlineJoined}
-              onBack={handleBack}
-            />
-          </motion.div>
-        )}
-
-        {screen === 'game' && (
-          <motion.div
-            key="game"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
-            className="screen-wrapper"
-          >
-            <GameScreen />
+            {screen === 'menu' && (
+              <MainMenu onSelectMode={handleSelectMode} />
+            )}
+            {screen === 'playerSetup' && (
+              <PlayerSetup
+                mode={mode as 'local' | 'ai'}
+                onStart={handlePlayerSetupDone}
+                onBack={handleBack}
+              />
+            )}
+            {screen === 'difficultyPicker' && (
+              <DifficultyPicker
+                onSelect={handleDifficultySelected}
+                onBack={handleBack}
+              />
+            )}
+            {screen === 'onlineSetup' && (
+              <OnlineSetup
+                onJoined={handleOnlineJoined}
+                onBack={handleBack}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Game screen — rendered directly, no opacity animation to avoid blank screen */}
+      {screen === 'game' && (
+        <div className="screen-wrapper">
+          <GameScreen />
+        </div>
+      )}
     </div>
   );
 }
