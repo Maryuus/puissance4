@@ -4,6 +4,7 @@ import {
   subscribeToRoom,
   makeOnlineMove,
   resetOnlineGame,
+  updateGame,
   getRoom,
   GameRow,
   isSupabaseConfigured,
@@ -37,6 +38,7 @@ export function useOnlineGame() {
       player1Name: row.player1_name,
       player2Name: row.player2_name,
       nextFirstPlayer: row.next_first_player as Player,
+      youtubeUrl: row.youtube_url ?? '',
     });
 
     if (row.status === 'won') {
@@ -50,6 +52,12 @@ export function useOnlineGame() {
       setOpponentConnected(true);
     }
   }, [syncOnlineState, setOpponentConnected]);
+
+  const handleYoutubeSync = useCallback(async (url: string) => {
+    const { roomCode } = useGameStore.getState();
+    if (!roomCode) return;
+    await updateGame(roomCode, { youtube_url: url || null });
+  }, []);
 
   // Keep ref in sync so the stable subscription closure always calls the latest version
   syncFromRowRef.current = syncFromRow;
@@ -148,6 +156,7 @@ export function useOnlineGame() {
   return {
     handleOnlineMove,
     handleOnlineRematch,
+    handleYoutubeSync,
     isConfigured: isSupabaseConfigured,
   };
 }

@@ -29,6 +29,7 @@ export interface GameRow {
   winner: number | null;
   next_first_player: number;
   winning_cells: [number, number][] | null;
+  youtube_url: string | null;
   created_at: string;
   updated_at: string;
 }

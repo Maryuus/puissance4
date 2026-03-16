@@ -24,10 +24,11 @@ function GameScreen() {
     status,
     opponentConnected,
     player2Name,
+    syncedYoutubeUrl,
   } = useGameStore();
 
   useAI();
-  const { handleOnlineRematch } = useOnlineGame();
+  const { handleOnlineRematch, handleYoutubeSync } = useOnlineGame();
 
   const handleRematch = async () => {
     if (mode === 'online') {
@@ -102,8 +103,11 @@ function GameScreen() {
         />
       )}
 
-      {/* Music player — floating bottom-right */}
-      <MusicPlayer />
+      {/* Music player — floating bottom-right, synced in online mode */}
+      <MusicPlayer
+        onUrlChange={mode === 'online' ? handleYoutubeSync : undefined}
+        syncedUrl={mode === 'online' ? syncedYoutubeUrl : undefined}
+      />
     </motion.div>
   );
 }

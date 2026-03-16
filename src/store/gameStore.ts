@@ -55,6 +55,7 @@ export interface GameState {
   roomCode: string | null;
   myPlayer: Player | null;
   opponentConnected: boolean;
+  syncedYoutubeUrl: string;
 
   // Next game's first player (alternating)
   nextFirstPlayer: Player;
@@ -98,6 +99,7 @@ export interface GameState {
     player1Name: string;
     player2Name: string;
     nextFirstPlayer: Player;
+    youtubeUrl?: string;
   }) => void;
 }
 
@@ -282,6 +284,7 @@ export const useGameStore = create<GameState>()(
       setRoomCode: (code) => set({ roomCode: code }),
       setMyPlayer: (player) => set({ myPlayer: player }),
       setOpponentConnected: (connected) => set({ opponentConnected: connected }),
+      syncedYoutubeUrl: '',
 
       syncOnlineState: (data) => {
         const state = get();
@@ -314,6 +317,7 @@ export const useGameStore = create<GameState>()(
           player1Name: data.player1Name,
           player2Name: data.player2Name,
           nextFirstPlayer: data.nextFirstPlayer as Player,
+          ...(data.youtubeUrl !== undefined && { syncedYoutubeUrl: data.youtubeUrl }),
         });
       },
     }),
