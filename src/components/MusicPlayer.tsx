@@ -2,38 +2,82 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface MusicPlayerProps {
-  /** When provided (online mode), called when URL changes so it can be synced */
   onUrlChange?: (url: string) => void;
-  /** URL synced from the other player (online mode) */
   syncedUrl?: string;
-  /** Render inline (relative) instead of fixed bottom-right */
   inline?: boolean;
 }
+
+// ── YouTube IFrame API loader ─────────────────────────────────────────────────
+// Using the JS API (instead of plain iframe) lets us call playVideo() explicitly,
+// which iOS Safari accepts because it's triggered within a user-gesture chain.
+
+declare global {
+  interface Window {
+    YT: {
+      Player: new (
+        el: HTMLElement,
+        opts: {
+          videoId: string;
+          width?: string | number;
+          height?: string | number;
+          playerVars?: Record<string, string | number>;
+          events?: {
+            onReady?: (e: { target: { playVideo: () => void } }) => void;
+          };
+        }
+      ) => { destroy: () => void };
+    };
+    onYouTubeIframeAPIReady?: () => void;
+  }
+}
+
+let ytScriptLoaded = false;
+let ytReady = false;
+const ytQueue: Array<() => void> = [];
+
+function onYTReady(cb: () => void) {
+  if (ytReady) { cb(); return; }
+  ytQueue.push(cb);
+  if (!ytScriptLoaded) {
+    ytScriptLoaded = true;
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      ytReady = true;
+      ytQueue.splice(0).forEach(fn => fn());
+      prev?.();
+    };
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractYouTubeId(input: string): string | null {
   if (!input.trim()) return null;
   try {
-    // Handle youtu.be short links
     const short = input.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
     if (short) return short[1];
-    // Handle youtube.com/watch?v= and /embed/
     const url = new URL(input);
     if (url.hostname.includes('youtube.com')) {
       return url.searchParams.get('v') ?? url.pathname.split('/').pop() ?? null;
     }
   } catch {
-    // If not a URL, try treating as bare ID
     if (/^[a-zA-Z0-9_-]{11}$/.test(input.trim())) return input.trim();
   }
   return null;
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPlayerProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [videoId, setVideoId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<{ destroy: () => void } | null>(null);
 
   // Sync from online partner
   useEffect(() => {
@@ -46,20 +90,58 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
         setOpen(true);
       }
     }
-  }, [syncedUrl]);
+  }, [syncedUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mount/update YouTube player via IFrame API (works on iOS)
+  useEffect(() => {
+    if (!videoId || !containerRef.current) return;
+
+    // Destroy previous player
+    playerRef.current?.destroy();
+    playerRef.current = null;
+
+    // Clear container and create a fresh target div
+    const container = containerRef.current;
+    container.innerHTML = '';
+    const target = document.createElement('div');
+    container.appendChild(target);
+
+    onYTReady(() => {
+      if (!container.isConnected) return; // component unmounted
+      playerRef.current = new window.YT.Player(target, {
+        videoId,
+        width: '100%',
+        height: '120',
+        playerVars: {
+          autoplay: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1, // prevents iOS fullscreen takeover
+        },
+        events: {
+          // Explicit playVideo() call — the only way iOS Safari allows autoplay
+          onReady: (e) => e.target.playVideo(),
+        },
+      });
+    });
+
+    return () => {
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
+  }, [videoId]);
 
   const handleLoad = () => {
     const id = extractYouTubeId(inputValue);
-    if (!id) {
-      setError('Lien YouTube invalide');
-      return;
-    }
+    if (!id) { setError('Lien YouTube invalide'); return; }
     setError('');
     setVideoId(id);
     onUrlChange?.(inputValue);
   };
 
   const handleClear = () => {
+    playerRef.current?.destroy();
+    playerRef.current = null;
     setVideoId(null);
     setInputValue('');
     setError('');
@@ -68,7 +150,6 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
 
   return (
     <div className={inline ? 'music-player-inline' : 'music-player-wrapper'}>
-      {/* Toggle button */}
       <motion.button
         className={`music-toggle-btn ${videoId ? 'music-active' : ''}`}
         onClick={() => setOpen(o => !o)}
@@ -79,7 +160,6 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
         {videoId && <span className="music-playing-dot" />}
       </motion.button>
 
-      {/* Panel */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -91,12 +171,7 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
           >
             <div className="music-panel-header">
               <span className="font-semibold text-sm">Musique de fond</span>
-              <button
-                className="music-close-btn"
-                onClick={() => setOpen(false)}
-              >
-                ✕
-              </button>
+              <button className="music-close-btn" onClick={() => setOpen(false)}>✕</button>
             </div>
 
             {!videoId ? (
@@ -107,15 +182,11 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
                 </p>
                 <div className="flex gap-2">
                   <input
-                    ref={inputRef}
                     type="text"
                     className="game-input flex-1 text-sm"
                     placeholder="https://youtube.com/watch?v=..."
                     value={inputValue}
-                    onChange={e => {
-                      setInputValue(e.target.value);
-                      setError('');
-                    }}
+                    onChange={e => { setInputValue(e.target.value); setError(''); }}
                     onKeyDown={e => e.key === 'Enter' && handleLoad()}
                   />
                   <motion.button
@@ -126,30 +197,19 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
                     ▶
                   </motion.button>
                 </div>
-                {error && (
-                  <p className="text-red-400 text-xs mt-1">{error}</p>
-                )}
-                <p className="text-xs opacity-40 mt-2">
-                  Soundboard, ambiance, musique... à toi de choisir 🎭
-                </p>
+                {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+                <p className="text-xs opacity-40 mt-2">Soundboard, ambiance, musique... 🎭</p>
               </div>
             ) : (
               <div className="music-player-area">
-                <iframe
-                  key={videoId}
-                  width="100%"
-                  height="120"
-                  src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`}
-                  title="YouTube music player"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope"
-                  allowFullScreen
-                  className="rounded-lg"
+                {/* YT IFrame API renders into this div */}
+                <div
+                  ref={containerRef}
+                  className="rounded-lg overflow-hidden"
+                  style={{ width: '100%', minHeight: '120px', background: '#000' }}
                 />
                 <div className="flex gap-2 mt-2">
-                  <button
-                    className="btn btn-ghost text-xs flex-1"
-                    onClick={handleClear}
-                  >
+                  <button className="btn btn-ghost text-xs flex-1" onClick={handleClear}>
                     Changer de musique
                   </button>
                 </div>
