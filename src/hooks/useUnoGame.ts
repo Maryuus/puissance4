@@ -165,7 +165,9 @@ export function useUnoGame() {
       const newColor = card.color === 'wild' ? (chosenColor ?? 'red') : card.color;
 
       let newDirection = r.direction;
-      let newDrawStack = r.draw_stack;
+      // Default to 0: only draw2/wild4 carry over the existing stack + add their value.
+      // Any other card (including wild) resets the draw stack to 0.
+      let newDrawStack = 0;
       // How many players to skip (beyond the natural "move to next")
       let extraSkips = 0;
 
@@ -180,10 +182,10 @@ export function useUnoGame() {
             extraSkips++;
             break;
           case 'draw2':
-            newDrawStack += 2;
+            newDrawStack = r.draw_stack + 2;
             break;
           case 'wild4':
-            newDrawStack += 4;
+            newDrawStack = r.draw_stack + 4;
             break;
         }
       }

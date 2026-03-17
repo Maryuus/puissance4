@@ -88,7 +88,7 @@ export function UnoGame({
 
   const isPlayable = (card: UnoCard): boolean => {
     if (!isMyTurn) return false;
-    if (isForced && card.value !== 'draw2' && card.value !== 'wild4') return false;
+    if (isForced && topCard && card.value !== topCard.value) return false;
     return topCard ? canPlay(card, topCard, room.current_color) : false;
   };
 
