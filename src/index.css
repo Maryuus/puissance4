@@ -1270,18 +1270,27 @@ body {
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  background: #090912;
+  background: var(--bg-primary);
   background-image:
     /* UNO 4-color corners */
-    radial-gradient(ellipse at 0% 0%, rgba(239,68,68,0.18) 0%, transparent 38%),
-    radial-gradient(ellipse at 100% 0%, rgba(59,130,246,0.16) 0%, transparent 38%),
-    radial-gradient(ellipse at 0% 100%, rgba(34,197,94,0.12) 0%, transparent 38%),
-    radial-gradient(ellipse at 100% 100%, rgba(234,179,8,0.14) 0%, transparent 38%),
+    radial-gradient(ellipse at 0% 0%, rgba(239,68,68,0.13) 0%, transparent 38%),
+    radial-gradient(ellipse at 100% 0%, rgba(59,130,246,0.11) 0%, transparent 38%),
+    radial-gradient(ellipse at 0% 100%, rgba(34,197,94,0.09) 0%, transparent 38%),
+    radial-gradient(ellipse at 100% 100%, rgba(234,179,8,0.1) 0%, transparent 38%),
     /* Felt table center */
-    radial-gradient(ellipse at 50% 50%, rgba(12,60,30,0.3) 0%, transparent 60%);
+    radial-gradient(ellipse at 50% 50%, rgba(12,60,30,0.15) 0%, transparent 60%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+/* Light mode overrides */
+.light .uno-game-root {
+  background-image:
+    radial-gradient(ellipse at 0% 0%, rgba(239,68,68,0.1) 0%, transparent 38%),
+    radial-gradient(ellipse at 100% 0%, rgba(59,130,246,0.09) 0%, transparent 38%),
+    radial-gradient(ellipse at 0% 100%, rgba(34,197,94,0.08) 0%, transparent 38%),
+    radial-gradient(ellipse at 100% 100%, rgba(234,179,8,0.09) 0%, transparent 38%),
+    radial-gradient(ellipse at 50% 50%, rgba(12,80,40,0.07) 0%, transparent 60%);
 }
 
 /* ── Header ── */
@@ -1290,8 +1299,8 @@ body {
   align-items: center;
   gap: 0.6rem;
   padding: 0.55rem 1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  background: rgba(0,0,0,0.35);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
   flex-shrink: 0;
 }
@@ -1336,8 +1345,8 @@ body {
 .uno-seats-area {
   padding: 0.7rem 0.75rem 0.6rem;
   flex-shrink: 0;
-  background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.2) 100%);
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: var(--glass-bg);
+  border-bottom: 1px solid var(--border-color);
   position: relative;
 }
 /* Glowing edge at bottom of opponent zone */
@@ -1346,7 +1355,7 @@ body {
   position: absolute;
   bottom: 0; left: 15%; right: 15%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15) 50%, transparent);
+  background: linear-gradient(90deg, transparent, var(--border-color) 50%, transparent);
   pointer-events: none;
 }
 .uno-seats-row {
@@ -1367,22 +1376,20 @@ body {
   gap: 0.35rem;
   padding: 0.5rem 0.65rem 0.45rem;
   border-radius: 16px;
-  background: rgba(255,255,255,0.04);
-  border: 1.5px solid rgba(255,255,255,0.08);
+  background: var(--bg-card);
+  border: 1.5px solid var(--glass-border);
   min-width: 72px;
   position: relative;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   flex-shrink: 0;
-  backdrop-filter: blur(4px);
 }
 .uno-seat-active {
   border-color: var(--seat-color, #34d399);
   box-shadow: 0 0 0 1px var(--seat-color, #34d399), 0 0 18px color-mix(in srgb, var(--seat-color, #34d399) 35%, transparent);
-  background: color-mix(in srgb, var(--seat-color, #34d399) 10%, rgba(0,0,0,0.3));
+  background: color-mix(in srgb, var(--seat-color, #34d399) 12%, var(--bg-card));
 }
 .uno-seat-me {
   border-style: dashed;
-  background: rgba(255,255,255,0.03);
 }
 
 .uno-seat-bottom {
@@ -1507,16 +1514,18 @@ body {
   min-height: 0;
   gap: 0.75rem;
   position: relative;
-  /* Felt table center glow */
-  background: radial-gradient(ellipse at center, rgba(15,80,40,0.22) 0%, transparent 70%);
 }
-/* Decorative corner dots on the table */
+.dark .uno-table {
+  background: radial-gradient(ellipse at center, rgba(15,80,40,0.2) 0%, transparent 70%);
+}
+/* Decorative border */
 .uno-table::before {
   content: '';
   position: absolute;
   inset: 8px;
   border-radius: 24px;
-  border: 1px solid rgba(255,255,255,0.03);
+  border: 1px solid var(--border-color);
+  opacity: 0.3;
   pointer-events: none;
 }
 .uno-direction-badge {
@@ -1533,11 +1542,11 @@ body {
   gap: 2rem;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.25);
+  background: var(--bg-card);
   border-radius: 20px;
   padding: 1.25rem 2rem;
-  border: 1px solid rgba(255,255,255,0.06);
-  box-shadow: inset 0 2px 12px rgba(0,0,0,0.35), 0 4px 20px rgba(0,0,0,0.3);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
 }
 .uno-pile {
   display: flex;
@@ -1594,15 +1603,15 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 12px;
-  background: linear-gradient(145deg, #7f1d1d, #450a0a);
-  border: 3px solid rgba(255,255,255,0.1);
+  background: linear-gradient(145deg, #9f1239, #4c0519);
+  border: 3px solid rgba(255,255,255,0.12);
   transform: translate(-4px, 4px);
 }
 .uno-deck-shadow-2 {
   position: absolute;
   inset: 0;
   border-radius: 12px;
-  background: linear-gradient(145deg, #5a1313, #300707);
+  background: linear-gradient(145deg, #7f1d1d, #3b0a0a);
   border: 3px solid rgba(255,255,255,0.07);
   transform: translate(-8px, 8px);
 }
@@ -1671,8 +1680,8 @@ body {
 .uno-hand-section {
   padding: 0.5rem 0.5rem 0.7rem;
   flex-shrink: 0;
-  background: linear-gradient(0deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 100%);
-  border-top: 1px solid rgba(255,255,255,0.07);
+  background: var(--glass-bg);
+  border-top: 1px solid var(--border-color);
   position: relative;
 }
 /* Subtle glowing edge at top of hand zone */
@@ -1681,7 +1690,7 @@ body {
   position: absolute;
   top: 0; left: 15%; right: 15%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12) 50%, transparent);
+  background: linear-gradient(90deg, transparent, var(--border-color) 50%, transparent);
   pointer-events: none;
 }
 .uno-hand-label {
