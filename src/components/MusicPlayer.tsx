@@ -7,9 +7,7 @@ interface MusicPlayerProps {
   inline?: boolean;
 }
 
-// ── YouTube IFrame API loader ─────────────────────────────────────────────────
-// Using the JS API (instead of plain iframe) lets us call playVideo() explicitly,
-// which iOS Safari accepts because it's triggered within a user-gesture chain.
+// ── YouTube IFrame API ────────────────────────────────────────────────────────
 
 declare global {
   interface Window {
@@ -22,13 +20,20 @@ declare global {
           height?: string | number;
           playerVars?: Record<string, string | number>;
           events?: {
-            onReady?: (e: { target: { playVideo: () => void } }) => void;
+            onReady?: (e: { target: YTPlayer }) => void;
+            onStateChange?: (e: { data: number }) => void;
           };
         }
-      ) => { destroy: () => void };
+      ) => YTPlayer;
     };
     onYouTubeIframeAPIReady?: () => void;
   }
+}
+
+interface YTPlayer {
+  playVideo: () => void;
+  pauseVideo: () => void;
+  destroy: () => void;
 }
 
 let ytScriptLoaded = false;
@@ -69,6 +74,8 @@ function extractYouTubeId(input: string): string | null {
   return null;
 }
 
+const YT_STATE_PLAYING = 1;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPlayerProps) {
@@ -76,8 +83,11 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
   const [inputValue, setInputValue] = useState('');
   const [videoId, setVideoId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // true once the player is ready but not yet playing (iOS PWA needs a manual tap)
+  const [needsTap, setNeedsTap] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
-  const playerRef = useRef<{ destroy: () => void } | null>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
 
   // Sync from online partner
   useEffect(() => {
@@ -92,35 +102,40 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
     }
   }, [syncedUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Mount/update YouTube player via IFrame API (works on iOS)
+  // Mount / update YouTube player
   useEffect(() => {
     if (!videoId || !containerRef.current) return;
 
-    // Destroy previous player
     playerRef.current?.destroy();
     playerRef.current = null;
+    setNeedsTap(false);
 
-    // Clear container and create a fresh target div
     const container = containerRef.current;
     container.innerHTML = '';
     const target = document.createElement('div');
     container.appendChild(target);
 
     onYTReady(() => {
-      if (!container.isConnected) return; // component unmounted
+      if (!container.isConnected) return;
       playerRef.current = new window.YT.Player(target, {
         videoId,
         width: '100%',
         height: '120',
-        playerVars: {
-          autoplay: 1,
-          rel: 0,
-          modestbranding: 1,
-          playsinline: 1, // prevents iOS fullscreen takeover
-        },
+        playerVars: { autoplay: 1, rel: 0, modestbranding: 1, playsinline: 1 },
         events: {
-          // Explicit playVideo() call — the only way iOS Safari allows autoplay
-          onReady: (e) => e.target.playVideo(),
+          onReady: (e) => {
+            e.target.playVideo();
+            // On iOS PWA the call above is silently ignored; we detect it via onStateChange
+          },
+          onStateChange: (e) => {
+            if (e.data === YT_STATE_PLAYING) {
+              // Video is playing — hide the tap prompt if it was showing
+              setNeedsTap(false);
+            } else if (e.data === -1 /* unstarted */ || e.data === 5 /* cued */) {
+              // onReady fired but autoplay was blocked → show tap-to-play
+              setNeedsTap(true);
+            }
+          },
         },
       });
     });
@@ -130,6 +145,12 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
       playerRef.current = null;
     };
   }, [videoId]);
+
+  const handleTapToPlay = () => {
+    // Called directly from a user tap → iOS allows playVideo() here
+    playerRef.current?.playVideo();
+    setNeedsTap(false);
+  };
 
   const handleLoad = () => {
     const id = extractYouTubeId(inputValue);
@@ -145,6 +166,7 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
     setVideoId(null);
     setInputValue('');
     setError('');
+    setNeedsTap(false);
     onUrlChange?.('');
   };
 
@@ -202,12 +224,29 @@ export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPla
               </div>
             ) : (
               <div className="music-player-area">
-                {/* YT IFrame API renders into this div */}
+                {/* YT IFrame API renders here */}
                 <div
                   ref={containerRef}
                   className="rounded-lg overflow-hidden"
                   style={{ width: '100%', minHeight: '120px', background: '#000' }}
                 />
+
+                {/* Tap-to-play button — only shown on iOS PWA where autoplay is blocked */}
+                <AnimatePresence>
+                  {needsTap && (
+                    <motion.button
+                      className="music-tap-play"
+                      onClick={handleTapToPlay}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      ▶ Appuyer pour lancer
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+
                 <div className="flex gap-2 mt-2">
                   <button className="btn btn-ghost text-xs flex-1" onClick={handleClear}>
                     Changer de musique

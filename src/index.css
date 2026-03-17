@@ -1943,6 +1943,23 @@ body {
 
 .music-player-area {
   color: var(--text-primary);
+  position: relative;
+}
+
+/* Shown only on iOS PWA when autoplay is blocked */
+.music-tap-play {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(239,68,68,0.4);
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 400px) {
