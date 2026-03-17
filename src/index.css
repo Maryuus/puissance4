@@ -1303,6 +1303,9 @@ body {
   background: var(--glass-bg);
   backdrop-filter: blur(12px);
   flex-shrink: 0;
+  position: relative;
+  z-index: 100;       /* above seats area so inline panel isn't covered */
+  overflow: visible;  /* allow panel to drop below the header */
 }
 
 .uno-room-badge {
@@ -1887,9 +1890,13 @@ body {
 }
 .music-panel-inline {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
-  z-index: 200;
+  z-index: 300;
+  /* Solid bg — no backdrop-filter (would look transparent inside the header stacking context) */
+  background: var(--bg-secondary) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .music-panel {
