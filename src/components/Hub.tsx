@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
 
 interface HubProps {
-  onSelectGame: (game: 'puissance4' | 'uno') => void;
+  onSelectGame: (game: 'puissance4' | 'uno' | 'monopolydeal') => void;
 }
 
 const games = [
@@ -24,16 +24,18 @@ const games = [
     accentMuted: 'rgba(239,68,68,0.15)',
     available: true,
   },
-] as const;
-
-const comingSoon = [
   {
+    id: 'monopolydeal' as const,
     name: 'Monopoly Deal',
-    description: 'Le jeu de cartes Monopoly — bientôt disponible',
+    description: 'Le jeu de cartes Monopoly · 2–5 joueurs',
     emoji: '🎩',
     accent: '#22c55e',
+    accentMuted: 'rgba(34,197,94,0.15)',
+    available: true,
   },
-];
+] as const;
+
+const comingSoon: { name: string; description: string; emoji: string; accent: string }[] = [];
 
 export function Hub({ onSelectGame }: HubProps) {
   const containerVariants = {
