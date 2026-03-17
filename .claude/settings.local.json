@@ -13,7 +13,11 @@
       "Bash(supabase:*)",
       "Bash(curl:*)",
       "Bash(sudo mv:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(tree:*)",
+      "Bash(wc:*)",
+      "Bash(cat:*)",
+      "Bash(mkdir:*)"
     ]
   }
 }

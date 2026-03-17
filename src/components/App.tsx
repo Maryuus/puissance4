@@ -112,7 +112,11 @@ function GameScreen() {
   );
 }
 
-export function App() {
+interface AppProps {
+  onGoBack?: () => void;
+}
+
+export function App({ onGoBack }: AppProps) {
   const {
     screen,
     mode,
@@ -187,7 +191,7 @@ export function App() {
             style={{ position: 'absolute', inset: 0 }}
           >
             {screen === 'menu' && (
-              <MainMenu onSelectMode={handleSelectMode} />
+              <MainMenu onSelectMode={handleSelectMode} onGoBack={onGoBack} />
             )}
             {screen === 'playerSetup' && (
               <PlayerSetup

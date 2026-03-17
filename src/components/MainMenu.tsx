@@ -4,6 +4,7 @@ import { ThemeToggle } from './ThemeToggle';
 
 interface MainMenuProps {
   onSelectMode: (mode: 'local' | 'ai' | 'online') => void;
+  onGoBack?: () => void;
 }
 
 interface ModeOption {
@@ -38,7 +39,7 @@ const modes: ModeOption[] = [
   },
 ];
 
-export function MainMenu({ onSelectMode }: MainMenuProps) {
+export function MainMenu({ onSelectMode, onGoBack }: MainMenuProps) {
   const { soundEnabled, toggleSound } = useGameStore();
 
   const containerVariants = {
@@ -65,6 +66,11 @@ export function MainMenu({ onSelectMode }: MainMenuProps) {
     <div className="menu-screen">
       {/* Header controls */}
       <div className="menu-header">
+        {onGoBack && (
+          <button onClick={onGoBack} className="btn btn-ghost text-sm" title="Accueil">
+            ← Hub
+          </button>
+        )}
         <button
           onClick={toggleSound}
           className="btn btn-ghost text-xl"
