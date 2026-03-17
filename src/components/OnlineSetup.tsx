@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
 import { createRoom, joinRoom, isSupabaseConfigured } from '../lib/supabase';
 import { Player } from '../lib/gameLogic';
+import { getSavedName, saveName } from '../lib/playerName';
 
 interface OnlineSetupProps {
   onJoined: (roomCode: string, playerNum: Player, myName: string) => void;
@@ -14,7 +15,7 @@ type OnlineTab = 'create' | 'join';
 export function OnlineSetup({ onJoined, onBack }: OnlineSetupProps) {
   const { player1Name } = useGameStore();
   const [tab, setTab] = useState<OnlineTab>('create');
-  const [myName, setMyName] = useState(player1Name);
+  const [myName, setMyName] = useState(() => getSavedName() || player1Name);
   const [roomCode, setRoomCode] = useState('');
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,7 @@ export function OnlineSetup({ onJoined, onBack }: OnlineSetupProps) {
     setLoading(true);
     setError(null);
 
+    saveName(myName);
     const game = await createRoom(myName.trim());
     if (game) {
       setCreatedCode(game.room_code);
@@ -85,6 +87,7 @@ export function OnlineSetup({ onJoined, onBack }: OnlineSetupProps) {
     setLoading(true);
     setError(null);
 
+    saveName(myName);
     const game = await joinRoom(code, myName.trim());
     if (game) {
       onJoined(code, 2, myName.trim() || 'Player 2');

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isSupabaseConfigured } from '../../lib/unoSupabase';
+import { getSavedName, saveName } from '../../lib/playerName';
 
 type Tab = 'create' | 'join';
 interface UnoSetupUIProps {
@@ -14,7 +15,7 @@ interface UnoSetupUIProps {
 
 export function UnoSetupUI({ onJoined, onBack, createRoom, joinRoom, loading, error }: UnoSetupUIProps) {
   const [tab, setTab] = useState<Tab>('create');
-  const [myName, setMyName] = useState('');
+  const [myName, setMyName] = useState(() => getSavedName());
   const [roomCode, setRoomCode] = useState('');
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -48,6 +49,7 @@ export function UnoSetupUI({ onJoined, onBack, createRoom, joinRoom, loading, er
     e.preventDefault();
     if (!myName.trim()) { setLocalError('Entre ton prénom.'); return; }
     setLocalError(null);
+    saveName(myName);
     const room = await createRoom(myName.trim()) as { room_code: string } | null;
     if (room) {
       setCreatedCode(room.room_code);
@@ -60,6 +62,7 @@ export function UnoSetupUI({ onJoined, onBack, createRoom, joinRoom, loading, er
     if (code.length !== 4) { setLocalError('Le code doit faire 4 caractères.'); return; }
     if (!myName.trim()) { setLocalError('Entre ton prénom.'); return; }
     setLocalError(null);
+    saveName(myName);
     const result = await joinRoom(code, myName.trim());
     if (result) onJoined();
   };

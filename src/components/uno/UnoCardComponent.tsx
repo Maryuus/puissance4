@@ -20,9 +20,10 @@ const COLOR_SOLID: Record<string, { bg: string; dark: string }> = {
 };
 
 function WildCardInner({ value, size }: { value: string; size: string }) {
-  const centerSize = size === 'sm' ? '1rem' : size === 'lg' ? '1.75rem' : '1.35rem';
+  const isWild4 = value === 'wild4';
+  const centerSize = size === 'sm' ? '1rem' : size === 'lg' ? (isWild4 ? '1.6rem' : '1.9rem') : (isWild4 ? '1.3rem' : '1.5rem');
   const cornerSize = size === 'sm' ? '0.55rem' : size === 'lg' ? '0.8rem' : '0.65rem';
-  const label = value === 'wild' ? '★' : '+4';
+  const label = isWild4 ? '+4' : '★';
   return (
     <>
       {/* 4-quadrant background */}
@@ -32,15 +33,23 @@ function WildCardInner({ value, size }: { value: string; size: string }) {
         <div className="uno-wild-q uno-wild-q-bl" />
         <div className="uno-wild-q uno-wild-q-br" />
       </div>
-      {/* Black oval with symbol */}
-      <div className="uno-wild-oval">
-        <span style={{ fontSize: centerSize, fontWeight: 900, color: 'white', transform: 'rotate(30deg)', display: 'block' }}>
+      {/* Oval with symbol */}
+      <div className={`uno-wild-oval ${isWild4 ? 'uno-wild4-oval' : ''}`}>
+        <span style={{
+          fontSize: centerSize,
+          fontWeight: 900,
+          color: isWild4 ? '#fde047' : 'white',
+          transform: 'rotate(25deg)',
+          display: 'block',
+          textShadow: isWild4 ? '0 0 12px rgba(253,224,71,0.8), 0 2px 4px rgba(0,0,0,0.8)' : '0 2px 4px rgba(0,0,0,0.6)',
+          letterSpacing: isWild4 ? '-0.02em' : '0',
+        }}>
           {label}
         </span>
       </div>
       {/* Corners */}
-      <span className="uno-card-corner uno-card-corner-tl" style={{ fontSize: cornerSize, color: 'white', zIndex: 3 }}>{label}</span>
-      <span className="uno-card-corner uno-card-corner-br" style={{ fontSize: cornerSize, color: 'white', zIndex: 3 }}>{label}</span>
+      <span className="uno-card-corner uno-card-corner-tl" style={{ fontSize: cornerSize, color: isWild4 ? '#fde047' : 'white', zIndex: 3 }}>{label}</span>
+      <span className="uno-card-corner uno-card-corner-br" style={{ fontSize: cornerSize, color: isWild4 ? '#fde047' : 'white', zIndex: 3 }}>{label}</span>
     </>
   );
 }
@@ -67,7 +76,9 @@ export function UnoCardComponent({
         onClick={onClick}
       >
         <div className="uno-card-back-inner">
-          <div className="uno-card-back-logo">UNO</div>
+          <div className="uno-card-back-oval">
+            <span className="uno-card-back-logo">UNO</span>
+          </div>
         </div>
       </motion.div>
     );

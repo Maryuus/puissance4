@@ -258,11 +258,15 @@ export function UnoGame({
         <div className="uno-piles">
           {/* Draw pile */}
           <div className="uno-pile">
+            <div className="uno-pile-header">
+              <span className="uno-pile-title">PIOCHE</span>
+              <span className="uno-pile-count">{room.deck.length}</span>
+            </div>
             <motion.div
-              className={`uno-deck-stack ${isMyTurn ? 'uno-deck-clickable' : ''}`}
-              whileHover={isMyTurn ? { scale: 1.06, y: -4 } : {}}
-              whileTap={isMyTurn ? { scale: 0.96 } : {}}
-              onClick={isMyTurn ? onDrawCard : undefined}
+              className={`uno-deck-stack ${isMyTurn && !hasDrawnThisTurn ? 'uno-deck-clickable' : ''} ${isMyTurn && !hasDrawnThisTurn && !isForced ? 'uno-deck-can-draw' : ''} ${isMyTurn && isForced ? 'uno-deck-must-draw' : ''}`}
+              whileHover={isMyTurn && !hasDrawnThisTurn ? { scale: 1.08, y: -6 } : {}}
+              whileTap={isMyTurn && !hasDrawnThisTurn ? { scale: 0.96 } : {}}
+              onClick={isMyTurn && !hasDrawnThisTurn ? onDrawCard : undefined}
             >
               {/* Stacked deck effect */}
               <div className="uno-deck-shadow-2" />
@@ -272,14 +276,22 @@ export function UnoGame({
                 <motion.div
                   className="uno-forced-badge"
                   initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring' }}
+                  animate={{ scale: [1, 1.1, 1] }}
+                  transition={{ type: 'spring', repeat: Infinity, duration: 0.7 }}
                 >
                   +{room.draw_stack}
                 </motion.div>
               )}
+              {isMyTurn && !hasDrawnThisTurn && !isForced && (
+                <motion.div
+                  className="uno-draw-hint"
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  Piocher
+                </motion.div>
+              )}
             </motion.div>
-            <span className="uno-pile-label">{room.deck.length} cartes</span>
           </div>
 
           {/* Active color dot center */}

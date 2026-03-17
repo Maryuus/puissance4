@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useGameStore } from '../store/gameStore';
+import { getSavedName, saveName } from '../lib/playerName';
 
 interface PlayerSetupProps {
   mode: 'local' | 'ai';
@@ -10,11 +11,12 @@ interface PlayerSetupProps {
 
 export function PlayerSetup({ mode, onStart, onBack }: PlayerSetupProps) {
   const { player1Name, player2Name } = useGameStore();
-  const [p1, setP1] = useState(player1Name);
+  const [p1, setP1] = useState(() => getSavedName() || player1Name);
   const [p2, setP2] = useState(mode === 'ai' ? 'AI' : player2Name);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    saveName(p1.trim() || 'Player 1');
     onStart(p1.trim() || 'Player 1', mode === 'ai' ? 'AI' : (p2.trim() || 'Player 2'));
   };
 

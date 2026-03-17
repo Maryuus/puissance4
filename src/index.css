@@ -1189,16 +1189,22 @@ body {
 
 .uno-wild-oval {
   position: absolute;
-  width: 58%;
-  height: 72%;
-  background: rgba(0,0,0,0.82);
+  width: 60%;
+  height: 74%;
+  background: rgba(5,5,15,0.88);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   transform: rotate(-25deg);
   z-index: 2;
-  border: 3px solid rgba(255,255,255,0.25);
+  border: 3px solid rgba(255,255,255,0.3);
+}
+/* Wild +4 gets a golden border to stand out */
+.uno-wild4-oval {
+  background: rgba(10,5,0,0.9);
+  border-color: rgba(253,224,71,0.5);
+  box-shadow: inset 0 0 10px rgba(253,224,71,0.15);
 }
 
 /* ── Card back ── */
@@ -1207,8 +1213,8 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 12px;
-  background: linear-gradient(145deg, #1a1a3e, #0a0a1f);
-  border: 3px solid rgba(255,255,255,0.15);
+  background: linear-gradient(145deg, #e11d48, #9f1239);
+  border: 3px solid rgba(255,255,255,0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1218,17 +1224,31 @@ body {
 .uno-card-back-inner::before {
   content: '';
   position: absolute;
-  inset: 6px;
+  inset: 4px;
   border-radius: 8px;
-  border: 2px solid rgba(255,255,255,0.1);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  pointer-events: none;
+}
+.uno-card-back-oval {
+  width: 60%;
+  height: 74%;
+  background: rgba(10,0,5,0.85);
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.25);
+  transform: rotate(-25deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
 }
 .uno-card-back-logo {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 900;
-  color: white;
-  letter-spacing: 0.15em;
-  text-shadow: 0 0 12px rgba(255,255,255,0.4);
-  z-index: 1;
+  color: #f43f5e;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 10px rgba(244,63,94,0.7);
+  transform: rotate(25deg);
+  display: block;
 }
 
 /* ── States ── */
@@ -1468,7 +1488,8 @@ body {
   justify-content: center;
   padding: 0.5rem 1rem;
   min-height: 0;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  background: radial-gradient(ellipse at center, rgba(15,80,40,0.18) 0%, transparent 65%);
 }
 .uno-direction-badge {
   font-size: 0.68rem;
@@ -1481,16 +1502,42 @@ body {
 }
 .uno-piles {
   display: flex;
-  gap: 1.75rem;
+  gap: 2rem;
   align-items: center;
   justify-content: center;
+  background: rgba(0,0,0,0.25);
+  border-radius: 20px;
+  padding: 1.25rem 2rem;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: inset 0 2px 12px rgba(0,0,0,0.35), 0 4px 20px rgba(0,0,0,0.3);
 }
 .uno-pile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   position: relative;
+}
+.uno-pile-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.uno-pile-title {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.uno-pile-count {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  padding: 1px 6px;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 .uno-pile-label {
   font-size: 0.65rem;
@@ -1519,7 +1566,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 12px;
-  background: linear-gradient(145deg, #1a1a3e, #0a0a1f);
+  background: linear-gradient(145deg, #7f1d1d, #450a0a);
   border: 3px solid rgba(255,255,255,0.1);
   transform: translate(-4px, 4px);
 }
@@ -1527,37 +1574,69 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 12px;
-  background: linear-gradient(145deg, #15153a, #080818);
+  background: linear-gradient(145deg, #5a1313, #300707);
   border: 3px solid rgba(255,255,255,0.07);
   transform: translate(-8px, 8px);
 }
 .uno-deck-stack > .uno-card { position: relative; z-index: 2; }
 
+/* Glow when it's your turn to draw */
+@keyframes deckGlowGreen {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(52,211,153,0.4), 0 4px 16px rgba(52,211,153,0.2); }
+  50%       { box-shadow: 0 0 0 4px rgba(52,211,153,0.7), 0 6px 24px rgba(52,211,153,0.4); }
+}
+@keyframes deckGlowRed {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(239,68,68,0.5), 0 4px 16px rgba(239,68,68,0.3); }
+  50%       { box-shadow: 0 0 0 5px rgba(239,68,68,0.8), 0 8px 28px rgba(239,68,68,0.5); }
+}
+.uno-deck-can-draw > .uno-card {
+  animation: deckGlowGreen 1.4s ease-in-out infinite;
+  border-radius: 12px;
+}
+.uno-deck-must-draw > .uno-card {
+  animation: deckGlowRed 0.8s ease-in-out infinite;
+  border-radius: 12px;
+}
+
+.uno-draw-hint {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #34d399;
+  white-space: nowrap;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 .uno-color-indicator {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
+  gap: 0.3rem;
 }
 .uno-active-color-dot {
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  border: 3px solid rgba(255,255,255,0.3);
+  border: 3px solid rgba(255,255,255,0.35);
   transition: background 0.3s, box-shadow 0.3s;
 }
 .uno-forced-badge {
   position: absolute;
-  top: -10px;
-  right: -10px;
+  top: -12px;
+  right: -12px;
   background: linear-gradient(135deg, #ef4444, #b91c1c);
   color: white;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 900;
-  padding: 3px 7px;
+  padding: 3px 8px;
   border-radius: 999px;
   border: 2px solid var(--bg-primary);
   z-index: 5;
-  box-shadow: 0 0 10px rgba(239,68,68,0.6);
+  box-shadow: 0 0 14px rgba(239,68,68,0.7);
 }
 
 /* ── Hand section ── */
