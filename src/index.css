@@ -1260,7 +1260,8 @@ body {
   box-shadow: 0 0 0 3px #60a5fa, 0 0 24px rgba(96,165,250,0.55);
 }
 .uno-card-disabled {
-  opacity: 0.38;
+  /* Use filter instead of opacity so cards don't show through each other */
+  filter: saturate(0.35) brightness(0.7);
   cursor: default;
 }
 
@@ -1269,11 +1270,15 @@ body {
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--bg-primary);
+  background: #090912;
   background-image:
-    radial-gradient(ellipse at 15% 60%, rgba(239,68,68,0.07) 0%, transparent 45%),
-    radial-gradient(ellipse at 85% 20%, rgba(234,179,8,0.06) 0%, transparent 45%),
-    radial-gradient(ellipse at 50% 50%, rgba(59,130,246,0.04) 0%, transparent 60%);
+    /* UNO 4-color corners */
+    radial-gradient(ellipse at 0% 0%, rgba(239,68,68,0.18) 0%, transparent 38%),
+    radial-gradient(ellipse at 100% 0%, rgba(59,130,246,0.16) 0%, transparent 38%),
+    radial-gradient(ellipse at 0% 100%, rgba(34,197,94,0.12) 0%, transparent 38%),
+    radial-gradient(ellipse at 100% 100%, rgba(234,179,8,0.14) 0%, transparent 38%),
+    /* Felt table center */
+    radial-gradient(ellipse at 50% 50%, rgba(12,60,30,0.3) 0%, transparent 60%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1284,10 +1289,10 @@ body {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--border-color);
-  background: rgba(0,0,0,0.2);
-  backdrop-filter: blur(8px);
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(12px);
   flex-shrink: 0;
 }
 
@@ -1329,17 +1334,27 @@ body {
 
 /* ── Player seats ── */
 .uno-seats-area {
-  padding: 0.75rem 0.75rem 0.5rem;
+  padding: 0.7rem 0.75rem 0.6rem;
   flex-shrink: 0;
-  background: rgba(0,0,0,0.1);
-  border-bottom: 1px solid var(--border-color);
+  background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.2) 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  position: relative;
+}
+/* Glowing edge at bottom of opponent zone */
+.uno-seats-area::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 15%; right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15) 50%, transparent);
+  pointer-events: none;
 }
 .uno-seats-row {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.6rem;
   overflow-x: auto;
   scrollbar-width: none;
-  padding-bottom: 0.25rem;
+  padding-bottom: 0.1rem;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -1349,23 +1364,25 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.6rem 0.4rem;
-  border-radius: 14px;
-  background: var(--glass-bg);
-  border: 1.5px solid var(--glass-border);
+  gap: 0.35rem;
+  padding: 0.5rem 0.65rem 0.45rem;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1.5px solid rgba(255,255,255,0.08);
   min-width: 72px;
   position: relative;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   flex-shrink: 0;
+  backdrop-filter: blur(4px);
 }
 .uno-seat-active {
   border-color: var(--seat-color, #34d399);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--seat-color, #34d399) 40%, transparent);
-  background: color-mix(in srgb, var(--seat-color, #34d399) 8%, var(--glass-bg));
+  box-shadow: 0 0 0 1px var(--seat-color, #34d399), 0 0 18px color-mix(in srgb, var(--seat-color, #34d399) 35%, transparent);
+  background: color-mix(in srgb, var(--seat-color, #34d399) 10%, rgba(0,0,0,0.3));
 }
 .uno-seat-me {
   border-style: dashed;
+  background: rgba(255,255,255,0.03);
 }
 
 .uno-seat-bottom {
@@ -1489,7 +1506,18 @@ body {
   padding: 0.5rem 1rem;
   min-height: 0;
   gap: 0.75rem;
-  background: radial-gradient(ellipse at center, rgba(15,80,40,0.18) 0%, transparent 65%);
+  position: relative;
+  /* Felt table center glow */
+  background: radial-gradient(ellipse at center, rgba(15,80,40,0.22) 0%, transparent 70%);
+}
+/* Decorative corner dots on the table */
+.uno-table::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.03);
+  pointer-events: none;
 }
 .uno-direction-badge {
   font-size: 0.68rem;
@@ -1641,25 +1669,35 @@ body {
 
 /* ── Hand section ── */
 .uno-hand-section {
-  padding: 0.6rem 0.5rem 0.75rem;
+  padding: 0.5rem 0.5rem 0.7rem;
   flex-shrink: 0;
-  background: rgba(0,0,0,0.2);
-  border-top: 1px solid var(--border-color);
+  background: linear-gradient(0deg, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 100%);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  position: relative;
+}
+/* Subtle glowing edge at top of hand zone */
+.uno-hand-section::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 15%; right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12) 50%, transparent);
+  pointer-events: none;
 }
 .uno-hand-label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.07em;
   padding: 0 0.75rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .uno-hand-hint {
-  font-size: 0.65rem;
+  font-size: 0.63rem;
   font-weight: 500;
   color: var(--text-muted);
   text-transform: none;
@@ -1680,21 +1718,21 @@ body {
   to   { box-shadow: 0 0 14px #ef4444; }
 }
 
-/* Fan hand */
-.uno-hand-fan-wrapper {
+/* Card row hand */
+.uno-hand-row-wrapper {
   display: flex;
   justify-content: center;
-  min-height: 100px;
-  padding: 0.25rem 1rem 0.25rem;
+  min-height: 96px;
+  padding: 0.1rem 0.75rem 0.2rem;
   overflow-x: auto;
   scrollbar-width: none;
 }
-.uno-hand-fan-wrapper::-webkit-scrollbar { display: none; }
-.uno-hand-fan {
+.uno-hand-row-wrapper::-webkit-scrollbar { display: none; }
+.uno-hand-row {
   display: flex;
   align-items: flex-end;
-  padding-bottom: 4px;
-  padding-top: 16px;
+  padding-bottom: 2px;
+  padding-top: 8px;
 }
 
 .uno-actions {
@@ -1761,6 +1799,7 @@ body {
   .uno-card-lg { width: 66px; height: 96px; }
   .uno-seat { min-width: 62px; padding: 0.4rem 0.45rem; }
   .uno-color-btn { width: 68px; height: 68px; }
+  .uno-hand-row-wrapper { padding: 0.1rem 0.5rem 0.2rem; }
 }
 
 /* ===== FOCUS VISIBLE ===== */

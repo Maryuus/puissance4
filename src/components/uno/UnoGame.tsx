@@ -354,16 +354,16 @@ export function UnoGame({
         {myHand.length === 0 ? (
           <div className="text-center py-4 opacity-50 text-sm">Plus de cartes !</div>
         ) : (
-          <div className="uno-hand-fan-wrapper">
-            <div className="uno-hand-fan">
+          <div className="uno-hand-row-wrapper">
+            <div className="uno-hand-row">
               <AnimatePresence>
                 {myHand.map((card, i) => {
                   const total = myHand.length;
                   const mid = (total - 1) / 2;
-                  const maxAngle = Math.min(total * 2.5, 28);
-                  const angle = total > 1 ? ((i - mid) / (mid || 1)) * maxAngle : 0;
-                  const yLift = total > 1 ? Math.pow(Math.abs(i - mid) / (mid || 1), 1.5) * 10 : 0;
-                  const overlap = total > 10 ? -20 : total > 6 ? -14 : -10;
+                  const normalized = total > 1 ? (i - mid) / (mid || 1) : 0;
+                  // Gentle arc: middle cards are 4px higher, no rotation
+                  const yArc = total > 2 ? (1 - Math.pow(Math.abs(normalized), 1.5)) * 4 : 0;
+                  const overlap = total > 13 ? -26 : total > 9 ? -20 : total > 6 ? -14 : total > 4 ? -8 : -4;
                   const playable = isPlayable(card);
                   return (
                     <motion.div
@@ -375,10 +375,10 @@ export function UnoGame({
                       transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                       style={{
                         marginLeft: i > 0 ? `${overlap}px` : 0,
-                        zIndex: playable ? total + i : i,
+                        zIndex: playable ? total + 10 + i : i,
                         position: 'relative',
-                        transform: `rotate(${angle}deg) translateY(${yLift}px)`,
-                        transformOrigin: 'bottom center',
+                        transform: `translateY(${-yArc}px)`,
+                        flexShrink: 0,
                       }}
                     >
                       <UnoCardComponent
