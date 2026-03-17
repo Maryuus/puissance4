@@ -28,6 +28,7 @@ export function UnoApp({ onGoBack }: UnoAppProps) {
     passTurn,
     callUno,
     counterUno,
+    syncYoutubeUrl,
     leaveRoom,
   } = useUnoGame();
 
@@ -57,6 +58,7 @@ export function UnoApp({ onGoBack }: UnoAppProps) {
         onPassTurn={passTurn}
         onCallUno={callUno}
         onCounterUno={counterUno}
+        onSyncYoutubeUrl={syncYoutubeUrl}
         onLeave={room.status === 'finished' ? handleLeaveToHub : handleLeave}
       />
     );

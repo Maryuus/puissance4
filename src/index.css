@@ -1343,11 +1343,13 @@ body {
 
 /* ── Player seats ── */
 .uno-seats-area {
-  padding: 0.7rem 0.75rem 0.6rem;
+  padding: 0.5rem 0.75rem 0.6rem;
   flex-shrink: 0;
   background: var(--glass-bg);
   border-bottom: 1px solid var(--border-color);
   position: relative;
+  /* Must NOT have overflow:hidden — card stacks and UNO badges overflow upward */
+  overflow: visible;
 }
 /* Glowing edge at bottom of opponent zone */
 .uno-seats-area::after {
@@ -1358,16 +1360,20 @@ body {
   background: linear-gradient(90deg, transparent, var(--border-color) 50%, transparent);
   pointer-events: none;
 }
+.uno-seats-scroll {
+  /* Scroll wrapper — separate from the flex row so overflow-x:auto doesn't clip vertically */
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 12px 2px 2px; /* top padding for badge overflow + card stack rotation */
+}
+.uno-seats-scroll::-webkit-scrollbar { display: none; }
 .uno-seats-row {
   display: flex;
   gap: 0.6rem;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 0.1rem;
   justify-content: center;
   flex-wrap: wrap;
+  min-width: max-content; /* ensures content doesn't wrap inside scroller */
 }
-.uno-seats-row::-webkit-scrollbar { display: none; }
 
 .uno-seat {
   display: flex;
@@ -1443,6 +1449,7 @@ body {
   position: relative;
   height: 42px;
   flex-shrink: 0;
+  overflow: visible; /* allow rotated cards to stick out */
 }
 .uno-card-stack-item {
   position: absolute;

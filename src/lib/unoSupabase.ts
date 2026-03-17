@@ -17,6 +17,7 @@ export interface UnoRoomRow {
   current_color: string;
   draw_stack: number;
   winner_id: string | null;
+  youtube_url?: string;
   created_at: string;
   updated_at: string;
 }

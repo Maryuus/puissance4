@@ -386,6 +386,12 @@ export function useUnoGame() {
     ]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const syncYoutubeUrl = useCallback(async (url: string) => {
+    const r = roomRef.current;
+    if (!r) return;
+    await updateUnoRoom(r.room_code, { youtube_url: url });
+  }, []);
+
   const leaveRoom = useCallback(() => {
     setRoom(null);
     setMyHand([]);
@@ -412,6 +418,7 @@ export function useUnoGame() {
     passTurn,
     callUno,
     counterUno,
+    syncYoutubeUrl,
     leaveRoom,
     isConfigured: isSupabaseConfigured,
   };

@@ -2,6 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { UnoCard, canPlay, UNO_COLORS } from '../../lib/unoLogic';
 import { UnoRoomRow } from '../../lib/unoSupabase';
 import { UnoCardComponent } from './UnoCardComponent';
+import { MusicPlayer } from '../MusicPlayer';
 
 interface UnoGameProps {
   room: UnoRoomRow;
@@ -17,6 +18,7 @@ interface UnoGameProps {
   onPassTurn: () => void;
   onCallUno: () => void;
   onCounterUno: (targetId: string) => void;
+  onSyncYoutubeUrl: (url: string) => void;
   onLeave: () => void;
 }
 
@@ -71,6 +73,7 @@ export function UnoGame({
   onPassTurn,
   onCallUno,
   onCounterUno,
+  onSyncYoutubeUrl,
   onLeave,
 }: UnoGameProps) {
   const otherPlayers = room.players.filter((p) => p.id !== myPlayerId);
@@ -143,6 +146,10 @@ export function UnoGame({
             </>
           )}
         </motion.div>
+        <MusicPlayer
+          onUrlChange={onSyncYoutubeUrl}
+          syncedUrl={room.youtube_url ?? ''}
+        />
         <button className="btn btn-ghost text-xs" onClick={onLeave} style={{ padding: '0.3rem 0.6rem' }}>
           ✕
         </button>
@@ -150,6 +157,7 @@ export function UnoGame({
 
       {/* ── Players around the table ─────────────────────── */}
       <div className="uno-seats-area">
+        <div className="uno-seats-scroll">
         <div className="uno-seats-row">
           {otherPlayers.map((player) => {
             const playerIdx = room.players.findIndex((p) => p.id === player.id);
@@ -210,6 +218,7 @@ export function UnoGame({
               </span>
             </div>
           </motion.div>
+        </div>
         </div>
       </div>
 
