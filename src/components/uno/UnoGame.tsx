@@ -26,6 +26,37 @@ const PLAYER_COLORS = [
   '#64748b', '#84cc16',
 ];
 
+const COLOR_BG: Record<string, string> = {
+  red: '#ef4444', blue: '#3b82f6', green: '#22c55e', yellow: '#eab308',
+};
+
+/** Mini stacked face-down cards showing how many cards a player has */
+function CardStack({ count, color }: { count: number; color: string }) {
+  const visible = Math.min(count, 6);
+  const width = 22 + visible * 5;
+  return (
+    <div className="uno-card-stack" style={{ width, minWidth: width }}>
+      {Array.from({ length: visible }).map((_, i) => (
+        <div
+          key={i}
+          className="uno-card-stack-item"
+          style={{
+            left: i * 5,
+            zIndex: i,
+            transform: `rotate(${(i - visible / 2) * 3}deg)`,
+            borderColor: `${color}60`,
+          }}
+        />
+      ))}
+      {count > 0 && (
+        <div className="uno-card-stack-count" style={{ color }}>
+          {count}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function UnoGame({
   room,
   myHand,
@@ -46,16 +77,12 @@ export function UnoGame({
   const currentPlayerName = room.players[room.current_player_index]?.name ?? '?';
   const isForced = room.draw_stack > 0;
   const myPlayer = room.players.find((p) => p.id === myPlayerId);
+  const myPlayerIdx = room.players.findIndex((p) => p.id === myPlayerId);
   const iNeedUno = myHand.length === 1 && !myPlayer?.unoSafe;
   const unoCandidates = room.players.filter(
     (p) => p.id !== myPlayerId && p.cardCount === 1 && !p.unoSafe
   );
 
-  const colorBg: Record<string, string> = {
-    red: '#ef4444', blue: '#3b82f6', green: '#22c55e', yellow: '#eab308',
-  };
-
-  // Check if a card in hand is playable
   const isPlayable = (card: UnoCard): boolean => {
     if (!isMyTurn) return false;
     if (isForced && card.value !== 'draw2' && card.value !== 'wild4') return false;
@@ -90,117 +117,157 @@ export function UnoGame({
 
   return (
     <div className="uno-game-root">
-      {/* Header */}
+
+      {/* ── Header ───────────────────────────────────────── */}
       <div className="uno-header">
-        <div className="uno-room-badge">Room: {room.room_code}</div>
-        <div
-          className="uno-turn-indicator"
-          style={{
-            color: isMyTurn ? '#34d399' : 'var(--text-secondary)',
+        <div className="uno-room-badge">🃏 {room.room_code}</div>
+        <motion.div
+          className="uno-turn-pill"
+          animate={{
+            background: isMyTurn
+              ? 'rgba(52,211,153,0.15)'
+              : 'rgba(255,255,255,0.04)',
             borderColor: isMyTurn ? '#34d399' : 'var(--border-color)',
+            color: isMyTurn ? '#34d399' : 'var(--text-secondary)',
           }}
         >
           {isMyTurn ? (
             <>
-              <div className="connection-dot connected" style={{ width: 6, height: 6 }} />
-              {isForced ? `Pioche ${room.draw_stack} cartes !` : 'C\'est ton tour'}
+              <span className="uno-turn-dot uno-turn-dot-active" />
+              {isForced ? `⚠️ Pioche ${room.draw_stack} !` : '✨ Ton tour'}
             </>
           ) : (
             <>
-              <div className="connection-dot waiting" style={{ width: 6, height: 6 }} />
-              Tour de {currentPlayerName}
+              <span className="uno-turn-dot" />
+              {currentPlayerName}…
             </>
           )}
-        </div>
-        <button className="btn btn-ghost text-xs" onClick={onLeave}>Quitter</button>
+        </motion.div>
+        <button className="btn btn-ghost text-xs" onClick={onLeave} style={{ padding: '0.3rem 0.6rem' }}>
+          ✕
+        </button>
       </div>
 
-      {/* Other players */}
-      <div className="uno-players-row">
-        {otherPlayers.map((player) => {
-          const playerIdx = room.players.findIndex((p) => p.id === player.id);
-          const isCurrent = playerIdx === room.current_player_index;
-          const color = PLAYER_COLORS[playerIdx % PLAYER_COLORS.length];
-          return (
-            <motion.div
-              key={player.id}
-              className={`uno-player-chip ${isCurrent ? 'uno-player-chip-active' : ''}`}
-              animate={isCurrent ? { scale: 1.05 } : { scale: 1 }}
-              style={isCurrent ? { borderColor: color, boxShadow: `0 0 10px ${color}40` } : {}}
-            >
-              <div
-                className="uno-player-avatar"
-                style={{ background: color }}
-              >
-                {player.name[0]?.toUpperCase()}
-              </div>
-              <div className="uno-player-info">
-                <span className="uno-player-name">{player.name}</span>
-                <span className="uno-player-cards">
-                  {player.cardCount} carte{player.cardCount !== 1 ? 's' : ''}
-                  {player.cardCount === 1 && ' 🔔 UNO!'}
-                </span>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      {/* UNO / Counter-UNO bar */}
-      {(iNeedUno || unoCandidates.length > 0) && (
-        <div className="uno-alert-bar">
-          {iNeedUno && (
-            <motion.button
-              className="uno-btn-uno"
-              onClick={onCallUno}
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 0.8, repeat: Infinity }}
-            >
-              🔔 UNO !
-            </motion.button>
-          )}
-          {unoCandidates.map((p) => (
-            <motion.button
-              key={p.id}
-              className="uno-btn-counter"
-              onClick={() => onCounterUno(p.id)}
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
-            >
-              ⚡ Contre-UNO {p.name}!
-            </motion.button>
-          ))}
-        </div>
-      )}
-
-      {/* Table area: deck + discard */}
-      <div className="uno-table">
-        <div className="uno-table-inner">
-          {/* Direction indicator */}
-          <div className="uno-direction">
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-              {room.direction === 1 ? '→ Sens horaire' : '← Sens anti-horaire'}
-            </span>
-          </div>
-
-          <div className="uno-piles">
-            {/* Draw pile */}
-            <div className="uno-pile">
-              <div className="uno-pile-label">Pioche ({room.deck.length})</div>
+      {/* ── Players around the table ─────────────────────── */}
+      <div className="uno-seats-area">
+        <div className="uno-seats-row">
+          {otherPlayers.map((player) => {
+            const playerIdx = room.players.findIndex((p) => p.id === player.id);
+            const isCurrent = playerIdx === room.current_player_index;
+            const color = PLAYER_COLORS[playerIdx % PLAYER_COLORS.length];
+            return (
               <motion.div
-                whileHover={isMyTurn && !hasDrawnThisTurn ? { scale: 1.08 } : {}}
-                whileTap={isMyTurn && !hasDrawnThisTurn ? { scale: 0.95 } : {}}
-                onClick={isMyTurn ? onDrawCard : undefined}
-                style={{ cursor: isMyTurn ? 'pointer' : 'default' }}
+                key={player.id}
+                className={`uno-seat ${isCurrent ? 'uno-seat-active' : ''}`}
+                animate={isCurrent ? { scale: 1.06 } : { scale: 1 }}
+                style={isCurrent ? { '--seat-color': color } as React.CSSProperties : {}}
               >
-                <UnoCardComponent
-                  faceDown
-                  size="lg"
-                  playable={isMyTurn && !hasDrawnThisTurn}
-                />
+                {/* Cards stack on top */}
+                <CardStack count={player.cardCount} color={color} />
+
+                {/* Avatar + name */}
+                <div className="uno-seat-bottom">
+                  <motion.div
+                    className="uno-seat-avatar"
+                    style={{ background: color }}
+                    animate={isCurrent ? { boxShadow: `0 0 0 3px ${color}60` } : { boxShadow: 'none' }}
+                  >
+                    {player.name[0]?.toUpperCase()}
+                  </motion.div>
+                  <span className="uno-seat-name">{player.name}</span>
+                  {isCurrent && (
+                    <motion.span
+                      className="uno-seat-turn-arrow"
+                      animate={{ y: [0, -3, 0] }}
+                      transition={{ duration: 0.6, repeat: Infinity }}
+                    >
+                      ▼
+                    </motion.span>
+                  )}
+                </div>
+                {player.cardCount === 1 && !player.unoSafe && (
+                  <div className="uno-seat-uno-badge">UNO!</div>
+                )}
               </motion.div>
+            );
+          })}
+
+          {/* Me */}
+          <motion.div
+            className={`uno-seat uno-seat-me ${isMyTurn ? 'uno-seat-active' : ''}`}
+            style={isMyTurn ? { '--seat-color': PLAYER_COLORS[myPlayerIdx % PLAYER_COLORS.length] } as React.CSSProperties : {}}
+          >
+            <CardStack count={myHand.length} color={PLAYER_COLORS[myPlayerIdx % PLAYER_COLORS.length]} />
+            <div className="uno-seat-bottom">
+              <div
+                className="uno-seat-avatar"
+                style={{ background: PLAYER_COLORS[myPlayerIdx % PLAYER_COLORS.length], border: '2px solid white' }}
+              >
+                {myPlayer?.name[0]?.toUpperCase()}
+              </div>
+              <span className="uno-seat-name" style={{ fontWeight: 800 }}>
+                {myPlayer?.name} <span style={{ opacity: 0.5, fontWeight: 400 }}>(toi)</span>
+              </span>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* ── UNO / Counter-UNO bar ─────────────────────────── */}
+      <AnimatePresence>
+        {(iNeedUno || unoCandidates.length > 0) && (
+          <motion.div
+            className="uno-alert-bar"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            {iNeedUno && (
+              <motion.button
+                className="uno-btn-uno"
+                onClick={onCallUno}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.94 }}
+                animate={{ scale: [1, 1.04, 1] }}
+                transition={{ duration: 0.7, repeat: Infinity }}
+              >
+                🔔 UNO !
+              </motion.button>
+            )}
+            {unoCandidates.map((p) => (
+              <motion.button
+                key={p.id}
+                className="uno-btn-counter"
+                onClick={() => onCounterUno(p.id)}
+                whileHover={{ scale: 1.06 }}
+                whileTap={{ scale: 0.94 }}
+              >
+                ⚡ Contre-UNO {p.name}!
+              </motion.button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Table: deck + discard + direction ────────────── */}
+      <div className="uno-table">
+        <div className="uno-direction-badge">
+          {room.direction === 1 ? '↻ Horaire' : '↺ Anti-horaire'}
+        </div>
+
+        <div className="uno-piles">
+          {/* Draw pile */}
+          <div className="uno-pile">
+            <motion.div
+              className={`uno-deck-stack ${isMyTurn ? 'uno-deck-clickable' : ''}`}
+              whileHover={isMyTurn ? { scale: 1.06, y: -4 } : {}}
+              whileTap={isMyTurn ? { scale: 0.96 } : {}}
+              onClick={isMyTurn ? onDrawCard : undefined}
+            >
+              {/* Stacked deck effect */}
+              <div className="uno-deck-shadow-2" />
+              <div className="uno-deck-shadow-1" />
+              <UnoCardComponent faceDown size="lg" />
               {isForced && isMyTurn && (
                 <motion.div
                   className="uno-forced-badge"
@@ -211,40 +278,47 @@ export function UnoGame({
                   +{room.draw_stack}
                 </motion.div>
               )}
-            </div>
+            </motion.div>
+            <span className="uno-pile-label">{room.deck.length} cartes</span>
+          </div>
 
-            {/* Discard pile */}
-            <div className="uno-pile">
-              <div className="uno-pile-label">Défausse</div>
-              <div className="uno-discard-wrapper">
+          {/* Active color dot center */}
+          <div className="uno-color-indicator">
+            <div
+              className="uno-active-color-dot"
+              style={{
+                background: COLOR_BG[room.current_color] ?? '#888',
+                boxShadow: `0 0 20px ${COLOR_BG[room.current_color] ?? '#888'}80`,
+              }}
+            />
+          </div>
+
+          {/* Discard pile */}
+          <div className="uno-pile">
+            <div className="uno-discard-wrapper">
+              <AnimatePresence mode="popLayout">
                 {topCard && (
-                  <AnimatePresence mode="popLayout">
-                    <motion.div
-                      key={topCard.id}
-                      initial={{ scale: 0.8, rotateZ: -10, opacity: 0 }}
-                      animate={{ scale: 1, rotateZ: 0, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                    >
-                      <UnoCardComponent card={topCard} size="lg" />
-                    </motion.div>
-                  </AnimatePresence>
+                  <motion.div
+                    key={topCard.id}
+                    initial={{ scale: 0.7, rotateZ: -15, opacity: 0 }}
+                    animate={{ scale: 1, rotateZ: 0, opacity: 1 }}
+                    exit={{ scale: 0.7, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+                  >
+                    <UnoCardComponent card={topCard} size="lg" />
+                  </motion.div>
                 )}
-              </div>
-              {/* Current active color badge */}
-              <div
-                className="uno-color-badge"
-                style={{ background: colorBg[room.current_color] ?? '#888' }}
-              />
+              </AnimatePresence>
             </div>
+            <span className="uno-pile-label">Défausse</span>
           </div>
         </div>
       </div>
 
-      {/* My hand */}
+      {/* ── My hand ──────────────────────────────────────── */}
       <div className="uno-hand-section">
         <div className="uno-hand-label">
-          Tes cartes ({myHand.length})
+          <span>Tes cartes</span>
           {myHand.length === 1 && (
             <motion.span
               className="uno-uno-badge"
@@ -255,46 +329,78 @@ export function UnoGame({
               UNO!
             </motion.span>
           )}
+          {isMyTurn && !isForced && !hasDrawnThisTurn && (
+            <span className="uno-hand-hint">Joue une carte ou pioche</span>
+          )}
+          {isMyTurn && isForced && (
+            <span className="uno-hand-hint" style={{ color: '#f87171' }}>
+              Pioche {room.draw_stack} ou stack !
+            </span>
+          )}
         </div>
 
         {myHand.length === 0 ? (
           <div className="text-center py-4 opacity-50 text-sm">Plus de cartes !</div>
         ) : (
-          <div className="uno-hand">
-            <AnimatePresence>
-              {myHand.map((card) => {
-                const playable = isPlayable(card);
-                return (
-                  <motion.div
-                    key={card.id}
-                    layout
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0, y: -30 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  >
-                    <UnoCardComponent
-                      card={card}
-                      playable={playable}
-                      disabled={!playable}
-                      onClick={playable ? () => onPlayCard(card) : undefined}
-                      size="md"
-                    />
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+          <div className="uno-hand-fan-wrapper">
+            <div className="uno-hand-fan">
+              <AnimatePresence>
+                {myHand.map((card, i) => {
+                  const total = myHand.length;
+                  const mid = (total - 1) / 2;
+                  const maxAngle = Math.min(total * 2.5, 28);
+                  const angle = total > 1 ? ((i - mid) / (mid || 1)) * maxAngle : 0;
+                  const yLift = total > 1 ? Math.pow(Math.abs(i - mid) / (mid || 1), 1.5) * 10 : 0;
+                  const overlap = total > 10 ? -20 : total > 6 ? -14 : -10;
+                  const playable = isPlayable(card);
+                  return (
+                    <motion.div
+                      key={card.id}
+                      layout
+                      initial={{ scale: 0, opacity: 0, y: 30 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0, opacity: 0, y: -30 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                      style={{
+                        marginLeft: i > 0 ? `${overlap}px` : 0,
+                        zIndex: playable ? total + i : i,
+                        position: 'relative',
+                        transform: `rotate(${angle}deg) translateY(${yLift}px)`,
+                        transformOrigin: 'bottom center',
+                      }}
+                    >
+                      <UnoCardComponent
+                        card={card}
+                        playable={playable}
+                        disabled={!playable}
+                        onClick={playable ? () => onPlayCard(card) : undefined}
+                        size="md"
+                      />
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
           </div>
         )}
 
-        {/* Action buttons */}
         {isMyTurn && (
           <div className="uno-actions">
+            {!hasDrawnThisTurn && (
+              <motion.button
+                className="uno-draw-btn"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={onDrawCard}
+              >
+                {isForced ? `Piocher ${room.draw_stack}` : 'Piocher'}
+              </motion.button>
+            )}
             {hasDrawnThisTurn && (
               <motion.button
                 className="btn btn-secondary"
                 onClick={onPassTurn}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
               >
                 Passer le tour
@@ -304,7 +410,7 @@ export function UnoGame({
         )}
       </div>
 
-      {/* Wild color picker overlay */}
+      {/* ── Wild color picker overlay ─────────────────────── */}
       <AnimatePresence>
         {pendingWild && (
           <motion.div
@@ -320,8 +426,8 @@ export function UnoGame({
               exit={{ scale: 0.8, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             >
-              <p className="text-sm font-semibold mb-3 text-center" style={{ color: 'var(--text-secondary)' }}>
-                {pendingWild.value === 'wild4' ? '+4 — ' : '★ — '}Choisir une couleur
+              <p className="text-sm font-semibold mb-4 text-center" style={{ color: 'var(--text-secondary)' }}>
+                {pendingWild.value === 'wild4' ? '⚡ +4 — ' : '★ Wild — '}Choisis une couleur
               </p>
               <div className="uno-color-grid">
                 {UNO_COLORS.map((c) => (
@@ -329,11 +435,11 @@ export function UnoGame({
                     key={c.value}
                     className="uno-color-btn"
                     style={{ background: c.bg }}
-                    whileHover={{ scale: 1.15 }}
+                    whileHover={{ scale: 1.12, boxShadow: `0 0 20px ${c.bg}80` }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => onSelectWildColor(c.value)}
                   >
-                    <span style={{ color: 'white', fontWeight: 700, fontSize: '0.75rem' }}>
+                    <span style={{ color: 'white', fontWeight: 800, fontSize: '0.8rem', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
                       {c.label}
                     </span>
                   </motion.button>
