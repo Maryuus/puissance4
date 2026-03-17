@@ -149,6 +149,7 @@ export function UnoGame({
         <MusicPlayer
           onUrlChange={onSyncYoutubeUrl}
           syncedUrl={room.youtube_url ?? ''}
+          inline
         />
         <button className="btn btn-ghost text-xs" onClick={onLeave} style={{ padding: '0.3rem 0.6rem' }}>
           ✕

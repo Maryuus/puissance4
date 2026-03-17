@@ -1690,6 +1690,7 @@ body {
   background: var(--glass-bg);
   border-top: 1px solid var(--border-color);
   position: relative;
+  overflow: visible; /* allow hover cards to scale above the section border */
 }
 /* Subtle glowing edge at top of hand zone */
 .uno-hand-section::before {
@@ -1734,21 +1735,19 @@ body {
   to   { box-shadow: 0 0 14px #ef4444; }
 }
 
-/* Card row hand */
+/* Card row hand — must NOT use overflow:auto (clips hover scale) */
 .uno-hand-row-wrapper {
   display: flex;
   justify-content: center;
   min-height: 96px;
-  padding: 0.1rem 0.75rem 0.2rem;
-  overflow-x: auto;
-  scrollbar-width: none;
+  padding: 16px 0.75rem 0.2rem; /* top padding for hover scale-up space */
+  overflow: visible;
 }
-.uno-hand-row-wrapper::-webkit-scrollbar { display: none; }
 .uno-hand-row {
   display: flex;
   align-items: flex-end;
   padding-bottom: 2px;
-  padding-top: 8px;
+  overflow: visible;
 }
 
 .uno-actions {
@@ -1815,7 +1814,7 @@ body {
   .uno-card-lg { width: 66px; height: 96px; }
   .uno-seat { min-width: 62px; padding: 0.4rem 0.45rem; }
   .uno-color-btn { width: 68px; height: 68px; }
-  .uno-hand-row-wrapper { padding: 0.1rem 0.5rem 0.2rem; }
+  .uno-hand-row-wrapper { padding: 12px 0.5rem 0.2rem; }
 }
 
 /* ===== FOCUS VISIBLE ===== */
@@ -1875,6 +1874,22 @@ body {
 @keyframes musicPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* Inline variant (used inside UNO header to avoid position:fixed issues with motion.div) */
+.music-player-inline {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.music-panel-inline {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
 }
 
 .music-panel {

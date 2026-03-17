@@ -6,6 +6,8 @@ interface MusicPlayerProps {
   onUrlChange?: (url: string) => void;
   /** URL synced from the other player (online mode) */
   syncedUrl?: string;
+  /** Render inline (relative) instead of fixed bottom-right */
+  inline?: boolean;
 }
 
 function extractYouTubeId(input: string): string | null {
@@ -26,7 +28,7 @@ function extractYouTubeId(input: string): string | null {
   return null;
 }
 
-export function MusicPlayer({ onUrlChange, syncedUrl }: MusicPlayerProps) {
+export function MusicPlayer({ onUrlChange, syncedUrl, inline = false }: MusicPlayerProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function MusicPlayer({ onUrlChange, syncedUrl }: MusicPlayerProps) {
   };
 
   return (
-    <div className="music-player-wrapper">
+    <div className={inline ? 'music-player-inline' : 'music-player-wrapper'}>
       {/* Toggle button */}
       <motion.button
         className={`music-toggle-btn ${videoId ? 'music-active' : ''}`}
@@ -73,7 +75,7 @@ export function MusicPlayer({ onUrlChange, syncedUrl }: MusicPlayerProps) {
         whileTap={{ scale: 0.92 }}
         title="Musique YouTube"
       >
-        <span className="text-lg">{videoId ? '🎵' : '🎵'}</span>
+        <span className="text-lg">🎵</span>
         {videoId && <span className="music-playing-dot" />}
       </motion.button>
 
@@ -81,10 +83,10 @@ export function MusicPlayer({ onUrlChange, syncedUrl }: MusicPlayerProps) {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="music-panel"
-            initial={{ opacity: 0, y: 8, scale: 0.97 }}
+            className={inline ? 'music-panel music-panel-inline' : 'music-panel'}
+            initial={{ opacity: 0, y: inline ? 4 : 8, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 8, scale: 0.97 }}
+            exit={{ opacity: 0, y: inline ? 4 : 8, scale: 0.97 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
           >
             <div className="music-panel-header">
