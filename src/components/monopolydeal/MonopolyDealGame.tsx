@@ -416,11 +416,11 @@ export function MonopolyDealGame({
           </p>
 
           {/* Bank cards */}
-          {myPlayer.bank.length > 0 && (
+          {(myPlayer?.bank.length ?? 0) > 0 && (
             <div style={{ marginBottom: 8 }}>
               <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Banque</p>
               <div className="md-hand-row">
-                {myPlayer.bank.map((c) => (
+                {myPlayer?.bank.map((c) => (
                   <MDCardComponent
                     key={c.id}
                     card={c}
@@ -443,7 +443,7 @@ export function MonopolyDealGame({
 
           {/* Property cards */}
           {ALL_COLORS.map((color) => {
-            const cards = myPlayer.sets[color];
+            const cards = myPlayer?.sets[color];
             if (!cards || cards.length === 0) return null;
             return (
               <div key={color} style={{ marginBottom: 6 }}>
@@ -778,7 +778,7 @@ export function MonopolyDealGame({
 
       case 'forced_deal_my_card': {
         const myProps = ALL_COLORS.flatMap((color) => {
-          const set = myPlayer.sets[color] ?? [];
+          const set = myPlayer?.sets[color] ?? [];
           const isComplete = isSetComplete(color, set);
           return set.map((c) => ({ card: c, color, isComplete }));
         }).filter((x) => !x.isComplete);

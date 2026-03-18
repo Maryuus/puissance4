@@ -184,7 +184,7 @@ export async function startMDGame(
       discard_pile: [],
       current_player_index: 0,
       cards_played_this_turn: 0,
-      turn_drawn: false,
+      turn_drawn: true,
       pending_action: null,
       winner_id: null,
     })
