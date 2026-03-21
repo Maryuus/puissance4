@@ -1,30 +1,20 @@
 import { motion } from 'framer-motion';
 import { MDRoomRow } from '../../lib/monopolyDealSupabase';
 
-interface MonopolyDealWaitingProps {
+interface Props {
   room: MDRoomRow;
   myPlayerId: string;
   loading: boolean;
   onStart: () => void;
   onLeave: () => void;
-  onSyncYoutubeUrl?: (url: string) => void;
 }
 
-export function MonopolyDealWaiting({
-  room,
-  myPlayerId,
-  loading,
-  onStart,
-  onLeave,
-  onSyncYoutubeUrl,
-}: MonopolyDealWaitingProps) {
+export function MonopolyDealWaiting({ room, myPlayerId, loading, onStart, onLeave }: Props) {
   const isHost = room.host_id === myPlayerId;
-  const canStart = room.players.length >= 2 && room.players.length <= 5;
+  const canStart = room.players.length >= 2;
 
   const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(room.room_code);
-    } catch { /* fallback */ }
+    try { await navigator.clipboard.writeText(room.room_code); } catch { /* ignore */ }
   };
 
   return (
@@ -34,23 +24,20 @@ export function MonopolyDealWaiting({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <div className="text-4xl mb-2">🎩</div>
+      <div className="text-4xl mb-2">🏠</div>
       <h2 className="setup-title">Salle d'attente</h2>
 
       <div className="room-code-display mb-4">
-        <span className="room-code-text" style={{ fontSize: '1.4rem', letterSpacing: '0.15em' }}>
-          {room.room_code}
-        </span>
+        <span className="room-code-text">{room.room_code}</span>
         <motion.button onClick={copyCode} className="copy-btn" whileTap={{ scale: 0.95 }}>
           📋
         </motion.button>
       </div>
 
       <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>
-        Partage ce code pour que tes amis rejoignent ({room.players.length}/5 joueurs)
+        Partage ce code pour inviter des amis ({room.players.length}/5 joueurs)
       </p>
 
-      {/* Player list */}
       <div className="w-full mb-4">
         <p className="text-xs font-semibold uppercase mb-2" style={{ color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>
           Joueurs connectés
@@ -63,29 +50,18 @@ export function MonopolyDealWaiting({
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.05 }}
               className="flex items-center gap-3 px-3 py-2 rounded-xl"
-              style={{
-                background: 'var(--glass-bg)',
-                border: '1px solid var(--glass-border)',
-              }}
+              style={{ background: 'var(--glass-bg)', border: '1px solid var(--glass-border)' }}
             >
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                style={{
-                  background: `hsl(${(index * 72) % 360}, 70%, 50%)`,
-                  color: 'white',
-                  flexShrink: 0,
-                }}
+                style={{ background: `hsl(${(index * 47) % 360}, 70%, 50%)`, color: 'white', flexShrink: 0 }}
               >
                 {player.name[0]?.toUpperCase()}
               </div>
-              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {player.name}
-              </span>
+              <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{player.name}</span>
               {player.id === room.host_id && (
-                <span
-                  className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
-                  style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}
-                >
+                <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' }}>
                   Hôte
                 </span>
               )}
@@ -96,22 +72,6 @@ export function MonopolyDealWaiting({
           ))}
         </div>
       </div>
-
-      {/* Music sync (optional) */}
-      {isHost && onSyncYoutubeUrl && (
-        <div className="w-full mb-4">
-          <p className="text-xs font-semibold uppercase mb-1" style={{ color: 'var(--text-secondary)', letterSpacing: '0.05em' }}>
-            Musique YouTube (optionnel)
-          </p>
-          <input
-            type="text"
-            className="game-input text-xs"
-            placeholder="URL YouTube..."
-            defaultValue={room.youtube_url}
-            onChange={(e) => onSyncYoutubeUrl(e.target.value)}
-          />
-        </div>
-      )}
 
       {!isHost && (
         <div className="waiting-indicator mb-4">
@@ -130,17 +90,13 @@ export function MonopolyDealWaiting({
         >
           {loading
             ? 'Lancement...'
-            : !canStart && room.players.length < 2
+            : !canStart
               ? "En attente d'un 2ème joueur..."
-              : room.players.length > 5
-                ? 'Maximum 5 joueurs'
-                : `Lancer la partie (${room.players.length} joueurs)`}
+              : `Lancer la partie (${room.players.length} joueurs)`}
         </motion.button>
       )}
 
-      <button className="btn btn-ghost w-full" onClick={onLeave}>
-        Quitter
-      </button>
+      <button className="btn btn-ghost w-full" onClick={onLeave}>Quitter</button>
     </motion.div>
   );
 }

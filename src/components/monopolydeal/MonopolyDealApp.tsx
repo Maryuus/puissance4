@@ -4,52 +4,29 @@ import { MonopolyDealSetup } from './MonopolyDealSetup';
 import { MonopolyDealWaiting } from './MonopolyDealWaiting';
 import { MonopolyDealGame } from './MonopolyDealGame';
 
-interface MonopolyDealAppProps {
+interface Props {
   onGoBack: () => void;
 }
 
-export function MonopolyDealApp({ onGoBack }: MonopolyDealAppProps) {
+export function MonopolyDealApp({ onGoBack }: Props) {
   const {
-    room,
-    myHand,
-    myPlayerId,
-    loading,
-    error,
-    isMyTurn,
-    isMyTurnToRespond,
-    hasJSNInHand,
-    pendingPlay,
-    paymentSelection,
-    setPaymentSelection,
+    room, myHand, myPlayerId, loading, error,
+    isMyTurn, isMyTurnToRespond, hasJSNInHand,
+    pendingPlay, setPendingPlay,
+    paymentSelection, setPaymentSelection,
     isDiscardMode,
-    createRoom,
-    joinRoom,
-    startGame,
-    playActionAsMoney,
-    playMoney,
-    playProperty,
-    initiateAction,
-    commitDebtCollector,
-    commitRent,
-    commitDealBreaker,
-    commitForcedDeal,
-    commitSlyDeal,
-    respondJSN,
-    acceptCancellation,
-    resolveActionEffect,
-    submitPayment,
-    moveWild,
-    endTurn,
-    discardCard,
+    createRoom, joinRoom, startGame, leaveRoom,
+    playMoney, playProperty, playActionAsMoney, initiateAction,
+    commitDebt, commitRent, commitDealBreaker, commitSlyDeal, commitForcedDeal,
+    respondJSN, acceptCancellation,
+    submitPayment, moveWild,
+    endTurn, discardCard,
     syncYoutubeUrl,
-    leaveRoom,
-    setPendingPlay,
   } = useMonopolyDealGame();
 
   const handleLeave = () => leaveRoom();
   const handleLeaveToHub = () => { leaveRoom(); onGoBack(); };
 
-  // Game screen
   if (room?.status === 'playing' || room?.status === 'finished') {
     return (
       <MonopolyDealGame
@@ -60,51 +37,43 @@ export function MonopolyDealApp({ onGoBack }: MonopolyDealAppProps) {
         isMyTurnToRespond={isMyTurnToRespond}
         hasJSNInHand={hasJSNInHand}
         pendingPlay={pendingPlay}
+        setPendingPlay={setPendingPlay}
         paymentSelection={paymentSelection}
         setPaymentSelection={setPaymentSelection}
         isDiscardMode={isDiscardMode}
-        onPlayActionAsMoney={playActionAsMoney}
         onPlayMoney={playMoney}
         onPlayProperty={playProperty}
+        onPlayActionAsMoney={playActionAsMoney}
         onInitiateAction={initiateAction}
-        onCommitDebtCollector={commitDebtCollector}
+        onCommitDebt={commitDebt}
         onCommitRent={commitRent}
         onCommitDealBreaker={commitDealBreaker}
-        onCommitForcedDeal={commitForcedDeal}
         onCommitSlyDeal={commitSlyDeal}
+        onCommitForcedDeal={commitForcedDeal}
         onRespondJSN={respondJSN}
         onAcceptCancellation={acceptCancellation}
-        onResolveAction={resolveActionEffect}
         onSubmitPayment={submitPayment}
         onMoveWild={moveWild}
         onEndTurn={endTurn}
         onDiscardCard={discardCard}
         onSyncYoutubeUrl={syncYoutubeUrl}
         onLeave={room.status === 'finished' ? handleLeaveToHub : handleLeave}
-        setPendingPlay={setPendingPlay}
       />
     );
   }
 
-  // Waiting room
   if (room?.status === 'waiting') {
     return (
       <div className="app-root">
         <div className="screen-wrapper">
           <AnimatePresence>
-            <motion.div
-              key="md-waiting"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
+            <motion.div key="md-waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <MonopolyDealWaiting
                 room={room}
                 myPlayerId={myPlayerId}
                 loading={loading}
                 onStart={startGame}
                 onLeave={handleLeaveToHub}
-                onSyncYoutubeUrl={syncYoutubeUrl}
               />
             </motion.div>
           </AnimatePresence>
@@ -113,17 +82,11 @@ export function MonopolyDealApp({ onGoBack }: MonopolyDealAppProps) {
     );
   }
 
-  // Setup screen
   return (
     <div className="app-root">
       <div className="screen-wrapper">
         <AnimatePresence>
-          <motion.div
-            key="md-setup"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
+          <motion.div key="md-setup" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <MonopolyDealSetup
               onBack={onGoBack}
               createRoom={createRoom}

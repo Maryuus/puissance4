@@ -1,361 +1,198 @@
 import { motion } from 'framer-motion';
-import { MDCard, COLOR_BG, COLOR_LABELS } from '../../lib/monopolyDealLogic';
+import { MDCard, PropertyColor, COLOR_BG, COLOR_LABEL } from '../../lib/monopolyDealLogic';
 
 interface MDCardProps {
   card: MDCard;
-  size?: 'sm' | 'md' | 'lg';
-  playable?: boolean;
-  disabled?: boolean;
   onClick?: () => void;
   selected?: boolean;
+  disabled?: boolean;
+  size?: 'sm' | 'md';
+  faceDown?: boolean;
+  className?: string;
 }
 
-const SIZE_MAP = {
-  sm: { w: 44, h: 62, fontSize: 8, valueFontSize: 10 },
-  md: { w: 60, h: 84, fontSize: 10, valueFontSize: 12 },
-  lg: { w: 80, h: 112, fontSize: 12, valueFontSize: 14 },
+const ACTION_BG: Record<string, string> = {
+  just_say_no:   'linear-gradient(145deg,#7c3aed,#4c1d95)',
+  birthday:      'linear-gradient(145deg,#f472b6,#be185d)',
+  debt_collector:'linear-gradient(145deg,#ef4444,#991b1b)',
+  deal_breaker:  'linear-gradient(145deg,#1e40af,#1e3a8a)',
+  sly_deal:      'linear-gradient(145deg,#0891b2,#0e7490)',
+  forced_deal:   'linear-gradient(145deg,#059669,#065f46)',
+  rent:          'linear-gradient(145deg,#d97706,#92400e)',
+  wild_rent:     'linear-gradient(145deg,#7c3aed,#0891b2)',
+  double_rent:   'linear-gradient(145deg,#dc2626,#ea580c)',
 };
 
-const ACTION_EMOJI: Record<string, string> = {
-  debt_collector: '💰',
-  birthday: '🎂',
-  deal_breaker: '💣',
-  forced_deal: '🔄',
-  sly_deal: '🥷',
-  rent: '🏠',
-  wild_rent: '🌍',
-  double_rent: '×2',
-  just_say_no: '🚫',
-};
-
-function MoneyCard({ card, dim }: { card: MDCard; dim: typeof SIZE_MAP['md'] }) {
+function ColorStrip({ color }: { color: PropertyColor }) {
   return (
-    <div
-      style={{
-        width: dim.w,
-        height: dim.h,
-        background: 'linear-gradient(135deg, #14532d 0%, #166534 100%)',
-        border: '2px solid #a16207',
-        borderRadius: 6,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Corner value */}
-      <span
-        style={{
-          position: 'absolute',
-          top: 2,
-          left: 3,
-          fontSize: dim.valueFontSize - 2,
-          fontWeight: 700,
-          color: '#fde68a',
-          lineHeight: 1,
-        }}
-      >
-        ${card.denomination}
-      </span>
-      <span
-        style={{
-          position: 'absolute',
-          bottom: 2,
-          right: 3,
-          fontSize: dim.valueFontSize - 2,
-          fontWeight: 700,
-          color: '#fde68a',
-          lineHeight: 1,
-          transform: 'rotate(180deg)',
-        }}
-      >
-        ${card.denomination}
-      </span>
-      {/* Center amount */}
-      <span
-        style={{
-          fontSize: dim.h * 0.28,
-          fontWeight: 900,
-          color: '#fde68a',
-          lineHeight: 1,
-        }}
-      >
-        ${card.denomination}
-      </span>
-      <span
-        style={{
-          fontSize: dim.fontSize - 1,
-          color: '#86efac',
-          fontWeight: 600,
-          marginTop: 1,
-        }}
-      >
-        millions
-      </span>
-    </div>
+    <div style={{
+      height: 14,
+      background: COLOR_BG[color],
+      borderRadius: '3px 3px 0 0',
+      flexShrink: 0,
+    }} />
   );
 }
 
-function PropertyCard({ card, dim }: { card: MDCard; dim: typeof SIZE_MAP['md'] }) {
-  const bg = card.color ? COLOR_BG[card.color] : '#6b7280';
-  const label = card.color ? COLOR_LABELS[card.color] : '';
+export function MDCardComponent({
+  card, onClick, selected, disabled, size = 'md', faceDown, className = '',
+}: MDCardProps) {
+  const w = size === 'sm' ? 52 : 68;
+  const h = size === 'sm' ? 76 : 96;
+  const fs = size === 'sm' ? 8 : 10;
 
-  return (
-    <div
-      style={{
-        width: dim.w,
-        height: dim.h,
-        background: bg,
-        border: '2px solid rgba(255,255,255,0.3)',
-        borderRadius: 6,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Color label strip at top */}
-      <div
+  if (faceDown) {
+    return (
+      <motion.div
+        className={`md-card ${className}`}
         style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          background: 'rgba(0,0,0,0.35)',
-          fontSize: dim.fontSize - 2,
-          color: '#fff',
-          fontWeight: 700,
-          textAlign: 'center',
-          padding: '1px 2px',
-          lineHeight: 1.3,
+          width: w, height: h, borderRadius: 6,
+          background: 'linear-gradient(145deg,#1e3a5f,#0f172a)',
+          border: '2px solid #334155', cursor: onClick ? 'pointer' : 'default',
+          flexShrink: 0,
         }}
-      >
-        {label}
-      </div>
-      {/* Property name */}
-      <span
-        style={{
-          fontSize: dim.fontSize,
-          fontWeight: 700,
-          color: '#fff',
-          textAlign: 'center',
-          padding: '0 3px',
-          lineHeight: 1.2,
-          textShadow: '0 1px 2px rgba(0,0,0,0.7)',
-          marginTop: 4,
-          wordBreak: 'break-word',
-        }}
-      >
-        {card.name}
-      </span>
-      {/* Value bottom corner */}
-      <span
-        style={{
-          position: 'absolute',
-          bottom: 2,
-          right: 3,
-          fontSize: dim.valueFontSize - 2,
-          fontWeight: 700,
-          color: '#fde68a',
-          background: 'rgba(0,0,0,0.4)',
-          borderRadius: 3,
-          padding: '0 2px',
-        }}
-      >
-        ${card.value}M
-      </span>
-    </div>
-  );
-}
-
-function WildPropertyCard({ card, dim }: { card: MDCard; dim: typeof SIZE_MAP['md'] }) {
-  let background: string;
-
-  if (card.isRainbow || !card.wildColors || card.wildColors.length === 0) {
-    background = 'linear-gradient(135deg, #ef4444 0%, #f97316 15%, #eab308 30%, #22c55e 50%, #38bdf8 65%, #6366f1 80%, #a855f7 100%)';
-  } else if (card.wildColors.length >= 2) {
-    const c1 = COLOR_BG[card.wildColors[0]];
-    const c2 = COLOR_BG[card.wildColors[1]];
-    background = `linear-gradient(135deg, ${c1} 50%, ${c2} 50%)`;
-  } else {
-    background = COLOR_BG[card.wildColors[0]];
+        whileHover={onClick ? { scale: 1.06 } : {}}
+        whileTap={onClick ? { scale: 0.95 } : {}}
+        onClick={onClick}
+      />
+    );
   }
 
-  return (
-    <div
-      style={{
-        width: dim.w,
-        height: dim.h,
-        background,
-        border: '2px solid rgba(255,255,255,0.5)',
-        borderRadius: 6,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* JOKER label */}
-      <div
+  const baseStyle: React.CSSProperties = {
+    width: w, height: h, borderRadius: 6, flexShrink: 0,
+    display: 'flex', flexDirection: 'column',
+    border: selected ? '2px solid #facc15' : '1.5px solid rgba(255,255,255,0.15)',
+    cursor: onClick && !disabled ? 'pointer' : disabled ? 'not-allowed' : 'default',
+    opacity: disabled ? 0.5 : 1,
+    overflow: 'hidden',
+    boxShadow: selected
+      ? '0 0 0 2px #facc15, 0 4px 12px rgba(0,0,0,0.4)'
+      : '0 2px 8px rgba(0,0,0,0.3)',
+    position: 'relative',
+  };
+
+  const handleClick = disabled ? undefined : onClick;
+
+  if (card.type === 'money') {
+    return (
+      <motion.div
+        className={`md-card ${className}`}
         style={{
-          background: 'rgba(0,0,0,0.55)',
-          borderRadius: 4,
-          padding: '1px 4px',
-          fontSize: dim.fontSize - 1,
-          fontWeight: 900,
-          color: '#fff',
-          letterSpacing: 1,
+          ...baseStyle,
+          background: 'linear-gradient(145deg,#16a34a,#14532d)',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
+        whileHover={onClick && !disabled ? { scale: 1.1, y: -6 } : {}}
+        whileTap={onClick && !disabled ? { scale: 0.95 } : {}}
+        onClick={handleClick}
       >
-        JOKER
+        <div style={{
+          background: 'rgba(255,255,255,0.15)',
+          borderRadius: 4,
+          padding: '4px 8px',
+          textAlign: 'center',
+        }}>
+          <div style={{ color: '#bbf7d0', fontSize: fs - 1, fontWeight: 700 }}>$</div>
+          <div style={{ color: 'white', fontSize: size === 'sm' ? 14 : 20, fontWeight: 900, lineHeight: 1 }}>
+            {card.denomination}
+          </div>
+          <div style={{ color: '#86efac', fontSize: fs - 2, marginTop: 1 }}>M</div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (card.type === 'property' && card.color) {
+    return (
+      <motion.div
+        className={`md-card ${className}`}
+        style={{ ...baseStyle, background: '#f8fafc' }}
+        whileHover={onClick && !disabled ? { scale: 1.1, y: -6 } : {}}
+        whileTap={onClick && !disabled ? { scale: 0.95 } : {}}
+        onClick={handleClick}
+      >
+        <ColorStrip color={card.color} />
+        <div style={{ flex: 1, padding: '2px 4px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: fs - 1, color: '#1e293b', fontWeight: 700, lineHeight: 1.2, wordBreak: 'break-word' }}>
+            {card.name}
+          </div>
+          <div style={{ fontSize: fs + 2, color: COLOR_BG[card.color], fontWeight: 900 }}>
+            ${card.value}M
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (card.type === 'wildProperty' && card.wildColors) {
+    const colors = card.wildColors;
+    return (
+      <motion.div
+        className={`md-card ${className}`}
+        style={{ ...baseStyle, overflow: 'hidden', background: '#1e293b' }}
+        whileHover={onClick && !disabled ? { scale: 1.1, y: -6 } : {}}
+        whileTap={onClick && !disabled ? { scale: 0.95 } : {}}
+        onClick={handleClick}
+      >
+        {/* Color stripes */}
+        <div style={{ display: 'flex', height: '40%', flexShrink: 0 }}>
+          {colors.slice(0, 3).map((c, i) => (
+            <div key={i} style={{ flex: 1, background: COLOR_BG[c] }} />
+          ))}
+        </div>
+        <div style={{ flex: 1, padding: '2px 3px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: fs - 2, color: 'white', fontWeight: 700 }}>
+            Joker
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {colors.map((c) => (
+              <span key={c} style={{
+                fontSize: fs - 3, padding: '0 2px', borderRadius: 2,
+                background: COLOR_BG[c], color: 'white', fontWeight: 600,
+              }}>
+                {COLOR_LABEL[c]}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: fs - 1, color: '#94a3b8' }}>${card.value}M</div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // action
+  const action = card.action ?? 'rent';
+  const bg = ACTION_BG[action] ?? ACTION_BG.rent;
+  return (
+    <motion.div
+      className={`md-card ${className}`}
+      style={{
+        ...baseStyle,
+        background: bg,
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '4px',
+        textAlign: 'center',
+      }}
+      whileHover={onClick && !disabled ? { scale: 1.1, y: -6 } : {}}
+      whileTap={onClick && !disabled ? { scale: 0.95 } : {}}
+      onClick={handleClick}
+    >
+      <div style={{ fontSize: fs - 1, color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>
+        ACTION
       </div>
-      {/* Color options */}
-      {!card.isRainbow && card.wildColors && card.wildColors.length > 0 && (
-        <div style={{ display: 'flex', gap: 2, marginTop: 3 }}>
-          {card.wildColors.map((c) => (
-            <div
-              key={c}
-              style={{
-                width: dim.w * 0.18,
-                height: dim.w * 0.18,
-                borderRadius: '50%',
-                background: COLOR_BG[c],
-                border: '1px solid rgba(255,255,255,0.6)',
-              }}
-            />
+      <div style={{ fontSize: fs, color: 'white', fontWeight: 900, lineHeight: 1.2 }}>
+        {card.name}
+      </div>
+      {card.rentColors && (
+        <div style={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {card.rentColors.map((c) => (
+            <div key={c} style={{ width: 8, height: 8, borderRadius: '50%', background: COLOR_BG[c] }} />
           ))}
         </div>
       )}
-      {card.isRainbow && (
-        <span style={{ fontSize: dim.fontSize - 2, color: '#fff', marginTop: 2 }}>★</span>
-      )}
-      {/* Value */}
-      <span
-        style={{
-          position: 'absolute',
-          bottom: 2,
-          right: 3,
-          fontSize: dim.valueFontSize - 2,
-          fontWeight: 700,
-          color: '#fde68a',
-          background: 'rgba(0,0,0,0.4)',
-          borderRadius: 3,
-          padding: '0 2px',
-        }}
-      >
-        ${card.value}M
-      </span>
-    </div>
-  );
-}
-
-function ActionCard({ card, dim }: { card: MDCard; dim: typeof SIZE_MAP['md'] }) {
-  const emoji = card.action ? ACTION_EMOJI[card.action] ?? '⚡' : '⚡';
-  const isDoubleRent = card.action === 'double_rent';
-
-  return (
-    <div
-      style={{
-        width: dim.w,
-        height: dim.h,
-        background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)',
-        border: '2px solid rgba(167,139,250,0.4)',
-        borderRadius: 6,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* Top accent line */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 3,
-          background: 'linear-gradient(90deg, #a78bfa, #818cf8)',
-        }}
-      />
-      {/* Emoji */}
-      <span style={{ fontSize: isDoubleRent ? dim.h * 0.22 : dim.h * 0.25, lineHeight: 1 }}>
-        {emoji}
-      </span>
-      {/* Action name */}
-      <span
-        style={{
-          fontSize: dim.fontSize - 1,
-          fontWeight: 700,
-          color: '#e0e7ff',
-          textAlign: 'center',
-          padding: '0 3px',
-          lineHeight: 1.2,
-          marginTop: 2,
-        }}
-      >
-        {card.label}
-      </span>
-      {/* Value corner */}
-      <span
-        style={{
-          position: 'absolute',
-          top: 4,
-          right: 3,
-          fontSize: dim.valueFontSize - 2,
-          fontWeight: 700,
-          color: '#a78bfa',
-        }}
-      >
-        ${card.value}
-      </span>
-    </div>
-  );
-}
-
-export function MDCardComponent({ card, size = 'md', playable, disabled, onClick, selected }: MDCardProps) {
-  const dim = SIZE_MAP[size];
-
-  let cardContent: React.ReactNode;
-  if (card.type === 'money') {
-    cardContent = <MoneyCard card={card} dim={dim} />;
-  } else if (card.type === 'property') {
-    cardContent = <PropertyCard card={card} dim={dim} />;
-  } else if (card.type === 'wildProperty') {
-    cardContent = <WildPropertyCard card={card} dim={dim} />;
-  } else {
-    cardContent = <ActionCard card={card} dim={dim} />;
-  }
-
-  return (
-    <motion.div
-      className="md-card"
-      onClick={!disabled ? onClick : undefined}
-      whileHover={playable && !disabled ? { y: -6, scale: 1.05 } : {}}
-      whileTap={!disabled && onClick ? { scale: 0.95 } : {}}
-      style={{
-        display: 'inline-block',
-        cursor: disabled ? 'default' : onClick ? 'pointer' : 'default',
-        opacity: disabled ? 0.5 : 1,
-        outline: selected ? '2px solid #fbbf24' : 'none',
-        outlineOffset: 2,
-        borderRadius: 8,
-        transition: 'opacity 0.15s',
-      }}
-    >
-      {cardContent}
+      <div style={{ fontSize: fs - 1, color: 'rgba(255,255,255,0.8)' }}>${card.value}M</div>
     </motion.div>
   );
 }

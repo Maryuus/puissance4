@@ -5,7 +5,7 @@ import { getSavedName, saveName } from '../../lib/playerName';
 
 type Tab = 'create' | 'join';
 
-interface MonopolyDealSetupProps {
+interface Props {
   onBack: () => void;
   createRoom: (name: string) => Promise<unknown>;
   joinRoom: (code: string, name: string) => Promise<unknown>;
@@ -13,7 +13,7 @@ interface MonopolyDealSetupProps {
   error: string | null;
 }
 
-export function MonopolyDealSetup({ onBack, createRoom, joinRoom, loading, error }: MonopolyDealSetupProps) {
+export function MonopolyDealSetup({ onBack, createRoom, joinRoom, loading, error }: Props) {
   const [tab, setTab] = useState<Tab>('create');
   const [myName, setMyName] = useState(() => getSavedName());
   const [roomCode, setRoomCode] = useState('');
@@ -24,18 +24,8 @@ export function MonopolyDealSetup({ onBack, createRoom, joinRoom, loading, error
   if (!isSupabaseConfigured) {
     return (
       <motion.div className="setup-container" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <div className="text-5xl mb-4">🔧</div>
         <h2 className="setup-title">Supabase Non Configuré</h2>
         <p className="setup-subtitle">Le multijoueur en ligne nécessite Supabase.</p>
-        <div className="config-instructions">
-          <p className="text-sm font-mono bg-black/20 rounded p-3 text-left">
-            1. Créer un projet sur <strong>supabase.com</strong><br />
-            2. Exécuter la migration SQL<br />
-            3. Ajouter dans <code>.env</code> :<br /><br />
-            <span className="text-green-400">VITE_SUPABASE_URL=...</span><br />
-            <span className="text-green-400">VITE_SUPABASE_ANON_KEY=...</span>
-          </p>
-        </div>
         <button onClick={onBack} className="btn btn-ghost mt-4">← Retour</button>
       </motion.div>
     );
@@ -79,8 +69,8 @@ export function MonopolyDealSetup({ onBack, createRoom, joinRoom, loading, error
       exit={{ opacity: 0, x: -50 }}
       transition={{ type: 'spring', stiffness: 200, damping: 20 }}
     >
-      <div className="text-4xl mb-2">🎩</div>
-      <h2 className="setup-title">Monopoly Deal — En ligne</h2>
+      <div className="text-4xl mb-2">🏠</div>
+      <h2 className="setup-title">Monopoly Deal</h2>
       <p className="setup-subtitle">2 à 5 joueurs</p>
 
       <div className="tab-bar">
@@ -133,11 +123,9 @@ export function MonopolyDealSetup({ onBack, createRoom, joinRoom, loading, error
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300 }}
               >
-                <p className="text-sm opacity-70 mb-2">Partage ce code (6 caractères) :</p>
+                <p className="text-sm opacity-70 mb-2">Partage ce code :</p>
                 <div className="room-code-display">
-                  <span className="room-code-text" style={{ fontSize: '1.5rem', letterSpacing: '0.15em' }}>
-                    {createdCode}
-                  </span>
+                  <span className="room-code-text">{createdCode}</span>
                   <motion.button onClick={copyCode} className="copy-btn" whileTap={{ scale: 0.95 }}>
                     {copied ? '✓' : '📋'}
                   </motion.button>

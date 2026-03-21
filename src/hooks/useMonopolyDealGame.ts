@@ -1,43 +1,38 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  MDCard,
-  MDPlayer,
-  MDPendingAction,
-  PropertyColor,
-  ActionType,
-  ALL_COLORS,
-  getOrCreatePlayerId,
-  countCompleteSets,
-  getRent,
+  MDCard, MDPlayer, MDPendingAction, PropertyColor, ActionType,
+  ALL_COLORS, safeBank, safeSets, safeSet,
+  isSetComplete, countCompleteSets, getRent, getOrCreatePlayerId,
+  shuffleDeck,
 } from '../lib/monopolyDealLogic';
 import {
   MDRoomRow,
-  createMDRoom,
-  joinMDRoom,
-  getMDRoom,
-  startMDGame,
-  updateMDRoom,
-  getMDHand,
-  updateMDHand,
-  subscribeToMDRoom,
-  subscribeToMDHand,
+  createMDRoom, joinMDRoom, getMDRoom, startMDGame,
+  updateMDRoom, getMDHand, updateMDHand,
+  subscribeToMDRoom, subscribeToMDHand,
   isSupabaseConfigured,
 } from '../lib/monopolyDealSupabase';
 
-export type PendingPlayStep =
-  | { type: 'action_choice'; card: MDCard }
-  | { type: 'color_picker'; card: MDCard }
-  | { type: 'rent_config'; card: MDCard; doubleRentCard?: MDCard }
-  | { type: 'wild_rent_target'; card: MDCard; rentColor: PropertyColor; doubleRentCard?: MDCard }
-  | { type: 'debt_target'; card: MDCard }
-  | { type: 'deal_breaker_target'; card: MDCard }
-  | { type: 'deal_breaker_set'; card: MDCard; targetPlayerId: string }
-  | { type: 'forced_deal_my_card'; card: MDCard }
-  | { type: 'forced_deal_target'; card: MDCard; myCardId: string; myCardColor: PropertyColor }
-  | { type: 'forced_deal_their_card'; card: MDCard; myCardId: string; myCardColor: PropertyColor; targetPlayerId: string }
-  | { type: 'sly_deal_target'; card: MDCard }
-  | { type: 'sly_deal_their_card'; card: MDCard; targetPlayerId: string };
+export { isSupabaseConfigured };
+
+// What the UI needs to show as "next step" when playing a card
+export type PendingPlay =
+  | { step: 'color_picker'; card: MDCard }                                   // wildProperty placement
+  | { step: 'action_choice'; card: MDCard }                                  // action: bank vs play
+  | { step: 'rent_color'; card: MDCard }                                     // choose which color to rent
+  | { step: 'rent_double'; card: MDCard; rentColor: PropertyColor }          // offer to add double rent
+  | { step: 'rent_target'; card: MDCard; rentColor: PropertyColor; doubleCard: MDCard | null }  // wild rent: pick target
+  | { step: 'debt_target'; card: MDCard }
+  | { step: 'deal_breaker_target'; card: MDCard }
+  | { step: 'deal_breaker_set'; card: MDCard; targetId: string }
+  | { step: 'sly_deal_target'; card: MDCard }
+  | { step: 'sly_deal_card'; card: MDCard; targetId: string }
+  | { step: 'forced_deal_my'; card: MDCard }
+  | { step: 'forced_deal_target'; card: MDCard; myCardId: string; myColor: PropertyColor }
+  | { step: 'forced_deal_their'; card: MDCard; myCardId: string; myColor: PropertyColor; targetId: string };
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useMonopolyDealGame() {
   const [room, setRoom] = useState<MDRoomRow | null>(null);
@@ -45,872 +40,488 @@ export function useMonopolyDealGame() {
   const [myPlayerId] = useState(() => getOrCreatePlayerId());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingPlay, setPendingPlay] = useState<PendingPlayStep | null>(null);
+  const [pendingPlay, setPendingPlay] = useState<PendingPlay | null>(null);
   const [paymentSelection, setPaymentSelection] = useState<MDCard[]>([]);
   const [isDiscardMode, setIsDiscardMode] = useState(false);
 
   const roomRef = useRef<MDRoomRow | null>(null);
   roomRef.current = room;
+  const handRef = useRef<MDCard[]>([]);
+  handRef.current = myHand;
+  const drawnRef = useRef(false);
 
-  const myHandRef = useRef<MDCard[]>([]);
-  myHandRef.current = myHand;
+  // ── Subscriptions ──────────────────────────────────────────────────────────
 
-  const autoDrawFiredRef = useRef(false);
-
-  // Subscribe to room + hand changes
   useEffect(() => {
     if (!room?.room_code || !room?.id) return;
-    const roomCode = room.room_code;
-    const roomId = room.id;
-    const unsubRoom = subscribeToMDRoom(roomCode, (updatedRoom) => {
-      // Normalize JSONB data — bank/sets may come back as null from Supabase
-      setRoom({
-        ...updatedRoom,
-        players: updatedRoom.players.map((p) => ({
-          ...p,
-          bank: p.bank ?? [],
-          sets: p.sets ?? {},
-        })),
-      });
+    const unsub1 = subscribeToMDRoom(room.room_code, (updated) => {
+      setRoom(normalizeRoom(updated));
     });
-    const unsubHand = subscribeToMDHand(roomId, myPlayerId, setMyHand);
-    return () => {
-      unsubRoom();
-      unsubHand();
-    };
+    const unsub2 = subscribeToMDHand(room.id, myPlayerId, (cards) => {
+      setMyHand(cards ?? []);
+    });
+    return () => { unsub1(); unsub2(); };
   }, [room?.room_code, room?.id, myPlayerId]);
 
-  // Fetch hand when game starts
+  // ── Load hand when game starts ─────────────────────────────────────────────
+
   useEffect(() => {
-    if (room?.status === 'playing' && room.id) {
-      getMDHand(room.id, myPlayerId).then((cards) => {
-        if (cards) setMyHand(cards);
-      });
-    }
+    if (room?.status !== 'playing' && room?.status !== 'finished') return;
+    getMDHand(room.id, myPlayerId).then((cards) => {
+      if (cards) setMyHand(cards);
+    });
   }, [room?.status, room?.id, myPlayerId]);
 
-  // Reset draw ref on turn change
-  const prevTurnRef = useRef(-1);
-  useEffect(() => {
-    const t = room?.current_player_index ?? -1;
-    if (t !== prevTurnRef.current) {
-      prevTurnRef.current = t;
-      autoDrawFiredRef.current = false;
-      setPendingPlay(null);
-      setIsDiscardMode(false);
-    }
-  }, [room?.current_player_index]);
+  // ── Auto-draw at start of turn ─────────────────────────────────────────────
 
-  // Confetti on win
+  const isMyTurn = room?.status === 'playing'
+    && room.players[room.current_player_index]?.id === myPlayerId;
+
+  useEffect(() => {
+    if (!isMyTurn) { drawnRef.current = false; return; }
+    if (!room || room.turn_drawn || room.pending_action || drawnRef.current) return;
+    drawnRef.current = true;
+    drawCards();
+  }, [isMyTurn, room?.turn_drawn, room?.pending_action]);
+
+  // ── Confetti on win ────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (room?.status === 'finished' && room.winner_id === myPlayerId) {
-      confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
-      setTimeout(() => {
-        confetti({ particleCount: 80, angle: 60, spread: 55, origin: { x: 0 } });
-        confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1 } });
-      }, 250);
+      confetti({ particleCount: 200, spread: 80, origin: { y: 0.5 } });
     }
   }, [room?.status, room?.winner_id, myPlayerId]);
 
-  const isMyTurn =
-    room?.status === 'playing' &&
-    room.players[room.current_player_index]?.id === myPlayerId;
+  // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  // Auto-draw when it becomes my turn and I haven't drawn
-  useEffect(() => {
-    if (
-      isMyTurn &&
-      room &&
-      !room.turn_drawn &&
-      !room.pending_action &&
-      !autoDrawFiredRef.current
-    ) {
-      autoDrawFiredRef.current = true;
-      drawCards();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyTurn, room?.turn_drawn, room?.pending_action]);
+  function normalizeRoom(r: MDRoomRow): MDRoomRow {
+    return {
+      ...r,
+      players: (r.players ?? []).map((p) => ({
+        ...p,
+        bank: p.bank ?? [],
+        sets: p.sets ?? {},
+      })),
+      deck: r.deck ?? [],
+      discard_pile: r.discard_pile ?? [],
+      pending_action: r.pending_action ?? null,
+    };
+  }
 
-  // ====== HELPERS ======
-
-  function checkWin(players: MDPlayer[]): string | null {
+  function checkWinner(players: MDPlayer[]): string | null {
     for (const p of players) {
       if (countCompleteSets(p) >= 3) return p.id;
     }
     return null;
   }
 
-  function findCardInSets(player: MDPlayer, cardId: string): { color: PropertyColor; card: MDCard } | null {
-    const sets = player.sets ?? {};
-    for (const color of ALL_COLORS) {
-      const set = sets[color];
-      if (set) {
-        const card = set.find((c) => c.id === cardId);
-        if (card) return { color, card };
-      }
-    }
-    return null;
+  // Update player in list (null-safe)
+  function updatePlayer(players: MDPlayer[], id: string, fn: (p: MDPlayer) => MDPlayer): MDPlayer[] {
+    return players.map((p) => (p.id === id ? fn(p) : p));
   }
 
-  function removeCardFromSet(player: MDPlayer, cardId: string, color: PropertyColor): MDPlayer {
-    const sets = player.sets ?? {};
+  // Add card to player's bank
+  function addToBank(p: MDPlayer, card: MDCard): MDPlayer {
+    return { ...p, bank: [...safeBank(p), card] };
+  }
+
+  // Add card to player's set
+  function addToSet(p: MDPlayer, card: MDCard, color: PropertyColor): MDPlayer {
+    const sets = safeSets(p);
+    return { ...p, sets: { ...sets, [color]: [...(sets[color] ?? []), card] } };
+  }
+
+  // Remove card from player's bank or sets, return [newPlayer, card|null]
+  function takeFromBank(p: MDPlayer, cardId: string): [MDPlayer, MDCard | null] {
+    const bank = safeBank(p);
+    const card = bank.find((c) => c.id === cardId) ?? null;
+    return [{ ...p, bank: bank.filter((c) => c.id !== cardId) }, card];
+  }
+
+  function takeFromSet(p: MDPlayer, cardId: string, color: PropertyColor): [MDPlayer, MDCard | null] {
+    const sets = safeSets(p);
     const set = sets[color] ?? [];
+    const card = set.find((c) => c.id === cardId) ?? null;
     const newSet = set.filter((c) => c.id !== cardId);
     const newSets = { ...sets };
-    if (newSet.length === 0) {
-      delete newSets[color];
-    } else {
-      newSets[color] = newSet;
-    }
-    return { ...player, sets: newSets };
+    if (newSet.length === 0) delete newSets[color];
+    else newSets[color] = newSet;
+    return [{ ...p, sets: newSets }, card];
   }
 
-  function addCardToSet(player: MDPlayer, card: MDCard, color: PropertyColor): MDPlayer {
-    const sets = player.sets ?? {};
-    const set = sets[color] ?? [];
-    return {
-      ...player,
-      sets: { ...sets, [color]: [...set, card] },
-    };
-  }
-
-  // ====== CORE ACTIONS ======
-
-  const createRoom = useCallback(
-    async (playerName: string) => {
-      setLoading(true);
-      setError(null);
-      const newRoom = await createMDRoom(playerName, myPlayerId);
-      if (newRoom) {
-        setRoom(newRoom);
-      } else {
-        setError('Impossible de créer la room.');
-      }
-      setLoading(false);
-      return newRoom;
-    },
-    [myPlayerId]
-  );
-
-  const joinRoom = useCallback(
-    async (roomCode: string, playerName: string) => {
-      setLoading(true);
-      setError(null);
-      const joined = await joinMDRoom(roomCode, playerName, myPlayerId);
-      if (joined) {
-        const fresh = await getMDRoom(roomCode);
-        setRoom(fresh ?? joined);
-      } else {
-        setError('Room introuvable ou complète (max 5 joueurs).');
-      }
-      setLoading(false);
-      return joined;
-    },
-    [myPlayerId]
-  );
-
-  const startGame = useCallback(async () => {
-    const r = roomRef.current;
-    if (!r || r.host_id !== myPlayerId || r.players.length < 2) return;
-    setLoading(true);
-    await startMDGame(r.room_code, r.id, r.players);
-    setLoading(false);
-  }, [myPlayerId]);
+  // ─── Draw ──────────────────────────────────────────────────────────────────
 
   const drawCards = useCallback(async () => {
     const r = roomRef.current;
-    const hand = myHandRef.current;
+    const hand = handRef.current;
     if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
     if (r.turn_drawn) return;
 
-    const drawCount = hand.length === 0 ? 5 : 2;
+    const count = hand.length === 0 ? 5 : 2;
     let deck = [...r.deck];
-    const discard = [...r.discard_pile];
+    let discard = [...r.discard_pile];
 
-    // Reshuffle discard into deck if needed
-    if (deck.length < drawCount && discard.length > 0) {
-      const reshuffled = [...discard];
-      for (let i = reshuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [reshuffled[i], reshuffled[j]] = [reshuffled[j], reshuffled[i]];
-      }
-      deck = [...deck, ...reshuffled];
+    if (deck.length < count && discard.length > 0) {
+      deck = [...deck, ...shuffleDeck(discard)];
+      discard = [];
     }
 
-    const drawn = deck.splice(-drawCount);
+    const drawn = deck.splice(-count);
     const newHand = [...hand, ...drawn];
 
     await Promise.all([
       updateMDHand(r.id, myPlayerId, newHand),
-      updateMDRoom(r.room_code, { deck, turn_drawn: true }),
+      updateMDRoom(r.room_code, { deck, discard_pile: discard, turn_drawn: true }),
     ]);
     setMyHand(newHand);
   }, [myPlayerId]);
 
-  const playActionAsMoney = useCallback(
-    async (card: MDCard) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
-      if (r.cards_played_this_turn >= 3) return;
-      if (!r.turn_drawn) return;
+  // ─── Play cards ────────────────────────────────────────────────────────────
 
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const players = r.players.map((p) => {
-        if (p.id !== myPlayerId) return p;
-        return { ...p, bank: [...(p.bank ?? []), card] };
-      });
+  const canPlay = (r: MDRoomRow) =>
+    r.status === 'playing' &&
+    r.players[r.current_player_index]?.id === myPlayerId &&
+    r.turn_drawn &&
+    r.cards_played_this_turn < 3 &&
+    !r.pending_action;
 
-      const winnerId = checkWin(players);
-      setPendingPlay(null);
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          players,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-          status: winnerId ? 'finished' : 'playing',
-          winner_id: winnerId ?? null,
-        }),
-      ]);
-      setMyHand(newHand);
-    },
-    [myPlayerId]
-  );
-
-  const playMoney = useCallback(
-    async (card: MDCard) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
-      if (r.cards_played_this_turn >= 3) return;
-      if (!r.turn_drawn) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const players = r.players.map((p) => {
-        if (p.id !== myPlayerId) return p;
-        return { ...p, bank: [...(p.bank ?? []), card] };
-      });
-
-      const winnerId = checkWin(players);
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          players,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-          status: winnerId ? 'finished' : 'playing',
-          winner_id: winnerId ?? null,
-        }),
-      ]);
-      setMyHand(newHand);
-    },
-    [myPlayerId]
-  );
-
-  const playProperty = useCallback(
-    async (card: MDCard, color: PropertyColor) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
-      if (r.cards_played_this_turn >= 3) return;
-      if (!r.turn_drawn) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const players = r.players.map((p) => {
-        if (p.id !== myPlayerId) return p;
-        const sets = p.sets ?? {};
-        const existingSet = sets[color] ?? [];
-        return {
-          ...p,
-          sets: { ...sets, [color]: [...existingSet, card] },
-        };
-      });
-
-      const winnerId = checkWin(players);
-      setPendingPlay(null);
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          players,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-          status: winnerId ? 'finished' : 'playing',
-          winner_id: winnerId ?? null,
-        }),
-      ]);
-      setMyHand(newHand);
-    },
-    [myPlayerId]
-  );
-
-  const initiateAction = useCallback(
-    (card: MDCard) => {
-      const r = roomRef.current;
-      if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
-      if (r.cards_played_this_turn >= 3) return;
-      if (!r.turn_drawn) return;
-
-      switch (card.action) {
-        case 'debt_collector':
-          setPendingPlay({ type: 'debt_target', card });
-          break;
-        case 'birthday':
-          commitBirthday(card);
-          break;
-        case 'deal_breaker':
-          setPendingPlay({ type: 'deal_breaker_target', card });
-          break;
-        case 'forced_deal':
-          setPendingPlay({ type: 'forced_deal_my_card', card });
-          break;
-        case 'sly_deal':
-          setPendingPlay({ type: 'sly_deal_target', card });
-          break;
-        case 'rent':
-          setPendingPlay({ type: 'rent_config', card });
-          break;
-        case 'wild_rent':
-          setPendingPlay({ type: 'rent_config', card });
-          break;
-        case 'double_rent':
-          // double_rent must be combined with a rent card — handle in UI
-          break;
-        default:
-          break;
-      }
-    },
-    [myPlayerId]
-  );
-
-  // Called after targeting steps for birthday (no targeting needed)
-  const commitBirthday = useCallback(
-    async (card: MDCard) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const otherPlayers = r.players.filter((p) => p.id !== myPlayerId);
-      const paymentQueue = otherPlayers.map((p) => ({
-        playerId: p.id,
-        amountOwed: 2,
-        paid: false,
-      }));
-
-      const pending: MDPendingAction = {
-        actionType: 'birthday',
-        actionCardId: card.id,
-        actorId: myPlayerId,
-        jsnCount: 0,
-        paymentQueue,
-        currentPayerIndex: 0,
-        doubleRent: false,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, card],
-          pending_action: pending,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-        }),
-      ]);
-      setMyHand(newHand);
-      setPendingPlay(null);
-    },
-    [myPlayerId]
-  );
-
-  const commitDebtCollector = useCallback(
-    async (card: MDCard, targetPlayerId: string) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const pending: MDPendingAction = {
-        actionType: 'debt_collector',
-        actionCardId: card.id,
-        actorId: myPlayerId,
-        jsnCount: 0,
-        paymentQueue: [{ playerId: targetPlayerId, amountOwed: 5, paid: false }],
-        currentPayerIndex: 0,
-        targetPlayerId,
-        doubleRent: false,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, card],
-          pending_action: pending,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-        }),
-      ]);
-      setMyHand(newHand);
-      setPendingPlay(null);
-    },
-    [myPlayerId]
-  );
-
-  const commitRent = useCallback(
-    async (
-      card: MDCard,
-      rentColor: PropertyColor,
-      targetPlayerId: string | null, // null = all players (standard rent)
-      doubleRentCard: MDCard | null
-    ) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r) return;
-
-      const myPlayer = r.players.find((p) => p.id === myPlayerId);
-      if (!myPlayer) return;
-
-      const setCards = (myPlayer.sets ?? {})[rentColor] ?? [];
-      let rentAmount = getRent(rentColor, setCards.length);
-      if (doubleRentCard) rentAmount *= 2;
-
-      const otherPlayers = r.players.filter((p) => p.id !== myPlayerId);
-      const targets = targetPlayerId
-        ? otherPlayers.filter((p) => p.id === targetPlayerId)
-        : otherPlayers;
-
-      const paymentQueue = targets.map((p) => ({
-        playerId: p.id,
-        amountOwed: rentAmount,
-        paid: false,
-      }));
-
-      let cardsPlayed = r.cards_played_this_turn + 1;
-      let newHand = hand.filter((c) => c.id !== card.id);
-      const toDiscard: MDCard[] = [card];
-
-      if (doubleRentCard) {
-        newHand = newHand.filter((c) => c.id !== doubleRentCard.id);
-        toDiscard.push(doubleRentCard);
-        cardsPlayed += 1;
-      }
-
-      const pending: MDPendingAction = {
-        actionType: card.action as ActionType,
-        actionCardId: card.id,
-        actorId: myPlayerId,
-        jsnCount: 0,
-        paymentQueue,
-        currentPayerIndex: 0,
-        rentColor,
-        doubleRent: !!doubleRentCard,
-        targetPlayerId: targetPlayerId ?? undefined,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, ...toDiscard],
-          pending_action: pending,
-          cards_played_this_turn: cardsPlayed,
-        }),
-      ]);
-      setMyHand(newHand);
-      setPendingPlay(null);
-    },
-    [myPlayerId]
-  );
-
-  const commitDealBreaker = useCallback(
-    async (card: MDCard, targetPlayerId: string, targetColor: PropertyColor) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const pending: MDPendingAction = {
-        actionType: 'deal_breaker',
-        actionCardId: card.id,
-        actorId: myPlayerId,
-        jsnCount: 0,
-        paymentQueue: [],
-        currentPayerIndex: 0,
-        targetPlayerId,
-        targetColor,
-        doubleRent: false,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, card],
-          pending_action: pending,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-        }),
-      ]);
-      setMyHand(newHand);
-      setPendingPlay(null);
-    },
-    [myPlayerId]
-  );
-
-  const commitForcedDeal = useCallback(
-    async (
-      card: MDCard,
-      myCardId: string,
-      myCardColor: PropertyColor,
-      targetPlayerId: string,
-      targetCardId: string,
-      targetCardColor: PropertyColor
-    ) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const pending: MDPendingAction = {
-        actionType: 'forced_deal',
-        actionCardId: card.id,
-        actorId: myPlayerId,
-        jsnCount: 0,
-        paymentQueue: [],
-        currentPayerIndex: 0,
-        targetPlayerId,
-        actorCardId: myCardId,
-        actorCardColor: myCardColor,
-        targetCardId,
-        targetCardColor,
-        doubleRent: false,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, card],
-          pending_action: pending,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-        }),
-      ]);
-      setMyHand(newHand);
-      setPendingPlay(null);
-    },
-    [myPlayerId]
-  );
-
-  const commitSlyDeal = useCallback(
-    async (
-      card: MDCard,
-      targetPlayerId: string,
-      targetCardId: string,
-      targetCardColor: PropertyColor
-    ) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-      const pending: MDPendingAction = {
-        actionType: 'sly_deal',
-        actionCardId: card.id,
-        actorId: myPlayerId,
-        jsnCount: 0,
-        paymentQueue: [],
-        currentPayerIndex: 0,
-        targetPlayerId,
-        stolenCardId: targetCardId,
-        stolenCardColor: targetCardColor,
-        stolenFromPlayerId: targetPlayerId,
-        doubleRent: false,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, card],
-          pending_action: pending,
-          cards_played_this_turn: r.cards_played_this_turn + 1,
-        }),
-      ]);
-      setMyHand(newHand);
-      setPendingPlay(null);
-    },
-    [myPlayerId]
-  );
-
-  // ====== JSN FLOW ======
-
-  const respondJSN = useCallback(
-    async (jsnCardId: string) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r || !r.pending_action) return;
-
-      const jsnCard = hand.find((c) => c.id === jsnCardId);
-      if (!jsnCard) return;
-
-      const newHand = hand.filter((c) => c.id !== jsnCardId);
-      const newJsnCount = r.pending_action.jsnCount + 1;
-
-      const updatedPending: MDPendingAction = {
-        ...r.pending_action,
-        jsnCount: newJsnCount,
-      };
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, jsnCard],
-          pending_action: updatedPending,
-        }),
-      ]);
-      setMyHand(newHand);
-    },
-    [myPlayerId]
-  );
-
-  const acceptCancellation = useCallback(async () => {
-    // Actor accepts that their action was cancelled (jsnCount is odd)
+  const playMoney = useCallback(async (card: MDCard) => {
     const r = roomRef.current;
-    if (!r || !r.pending_action) return;
+    if (!r || !canPlay(r)) return;
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    const players = updatePlayer(r.players, myPlayerId, (p) => addToBank(p, card));
+    const winner = checkWinner(players);
+    setPendingPlay(null);
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        players, cards_played_this_turn: r.cards_played_this_turn + 1,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      }),
+    ]);
+    setMyHand(newHand);
+  }, [myPlayerId]);
 
+  const playProperty = useCallback(async (card: MDCard, color: PropertyColor) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    const players = updatePlayer(r.players, myPlayerId, (p) => addToSet(p, card, color));
+    const winner = checkWinner(players);
+    setPendingPlay(null);
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        players, cards_played_this_turn: r.cards_played_this_turn + 1,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      }),
+    ]);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  const playActionAsMoney = useCallback(async (card: MDCard) => {
+    await playMoney(card);
+  }, [playMoney]);
+
+  // ─── Action initiators ─────────────────────────────────────────────────────
+
+  const initiateAction = useCallback((card: MDCard) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+    switch (card.action) {
+      case 'birthday':
+      case 'debt_collector':
+        setPendingPlay({ step: 'debt_target', card });
+        break;
+      case 'deal_breaker':
+        setPendingPlay({ step: 'deal_breaker_target', card });
+        break;
+      case 'sly_deal':
+        setPendingPlay({ step: 'sly_deal_target', card });
+        break;
+      case 'forced_deal':
+        setPendingPlay({ step: 'forced_deal_my', card });
+        break;
+      case 'rent':
+      case 'wild_rent':
+        setPendingPlay({ step: 'rent_color', card });
+        break;
+      default:
+        break;
+    }
+  }, [myPlayerId]);
+
+  // ─── Birthday / Debt collector ─────────────────────────────────────────────
+
+  const commitDebt = useCallback(async (card: MDCard, targetId: string | null) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    const isBirthday = card.action === 'birthday';
+    const amount = isBirthday ? 2 : 5;
+
+    const others = r.players.filter((p) => p.id !== myPlayerId);
+    const queue = isBirthday
+      ? others.map((p) => ({ playerId: p.id, amount }))
+      : [{ playerId: targetId!, amount }];
+
+    const discard = [...r.discard_pile, card];
+    const pending: MDPendingAction = {
+      type: 'payment', actorId: myPlayerId,
+      actionType: card.action as ActionType, queue, jsnCount: 0, card,
+    };
+
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        discard_pile: discard,
+        cards_played_this_turn: r.cards_played_this_turn + 1,
+        pending_action: pending,
+      }),
+    ]);
+    setPendingPlay(null);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  // ─── Rent ──────────────────────────────────────────────────────────────────
+
+  const commitRent = useCallback(async (
+    card: MDCard, rentColor: PropertyColor, targetId: string | null, doubleCard: MDCard | null,
+  ) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+
+    let newHand = handRef.current.filter((c) => c.id !== card.id);
+    let played = 1;
+    if (doubleCard) {
+      newHand = newHand.filter((c) => c.id !== doubleCard.id);
+      played = 2;
+    }
+
+    const myPlayer = r.players.find((p) => p.id === myPlayerId)!;
+    const cardCount = safeSet(myPlayer, rentColor).length;
+    let rentAmount = getRent(rentColor, cardCount);
+    if (doubleCard) rentAmount *= 2;
+
+    const others = r.players.filter((p) => p.id !== myPlayerId);
+    const targets = targetId ? others.filter((p) => p.id === targetId) : others;
+    const queue = targets.map((p) => ({ playerId: p.id, amount: rentAmount }));
+
+    const discard = [...r.discard_pile, card, ...(doubleCard ? [doubleCard] : [])];
+    const pending: MDPendingAction = {
+      type: 'payment', actorId: myPlayerId,
+      actionType: card.action as ActionType, queue, jsnCount: 0, card,
+    };
+
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        discard_pile: discard,
+        cards_played_this_turn: r.cards_played_this_turn + played,
+        pending_action: pending,
+      }),
+    ]);
+    setPendingPlay(null);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  // ─── Deal Breaker ──────────────────────────────────────────────────────────
+
+  const commitDealBreaker = useCallback(async (card: MDCard, targetId: string, color: PropertyColor) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+
+    const target = r.players.find((p) => p.id === targetId);
+    if (!target) return;
+    const stolenSet = safeSet(target, color);
+    if (!isSetComplete(color, stolenSet)) return;
+
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    let players = updatePlayer(r.players, targetId, (p) => {
+      const sets = { ...safeSets(p) };
+      delete sets[color];
+      return { ...p, sets };
+    });
+    players = updatePlayer(players, myPlayerId, (p) => {
+      const sets = safeSets(p);
+      const existing = sets[color] ?? [];
+      return { ...p, sets: { ...sets, [color]: [...existing, ...stolenSet] } };
+    });
+
+    const winner = checkWinner(players);
+    const discard = [...r.discard_pile, card];
+    setPendingPlay(null);
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        players, discard_pile: discard,
+        cards_played_this_turn: r.cards_played_this_turn + 1,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      }),
+    ]);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  // ─── Sly Deal ──────────────────────────────────────────────────────────────
+
+  const commitSlyDeal = useCallback(async (card: MDCard, targetId: string, cardId: string, color: PropertyColor) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+
+    let [newTarget, stolen] = takeFromSet(r.players.find((p) => p.id === targetId)!, cardId, color);
+    if (!stolen) return;
+
+    let players = updatePlayer(r.players, targetId, () => newTarget);
+    players = updatePlayer(players, myPlayerId, (p) => addToSet(p, stolen!, color));
+
+    const winner = checkWinner(players);
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    const discard = [...r.discard_pile, card];
+    setPendingPlay(null);
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        players, discard_pile: discard,
+        cards_played_this_turn: r.cards_played_this_turn + 1,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      }),
+    ]);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  // ─── Forced Deal ───────────────────────────────────────────────────────────
+
+  const commitForcedDeal = useCallback(async (
+    card: MDCard, myCardId: string, myColor: PropertyColor,
+    targetId: string, theirCardId: string, theirColor: PropertyColor,
+  ) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+
+    const target = r.players.find((p) => p.id === targetId);
+    if (!target) return;
+
+    let [me, myCard] = takeFromSet(r.players.find((p) => p.id === myPlayerId)!, myCardId, myColor);
+    let [them, theirCard] = takeFromSet(target, theirCardId, theirColor);
+    if (!myCard || !theirCard) return;
+
+    let players = updatePlayer(r.players, myPlayerId, () => addToSet(me, theirCard!, theirColor));
+    players = updatePlayer(players, targetId, () => addToSet(them, myCard!, myColor));
+
+    const winner = checkWinner(players);
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    const discard = [...r.discard_pile, card];
+    setPendingPlay(null);
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, {
+        players, discard_pile: discard,
+        cards_played_this_turn: r.cards_played_this_turn + 1,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      }),
+    ]);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  // ─── Just Say No ───────────────────────────────────────────────────────────
+
+  const respondJSN = useCallback(async (jsnCardId: string) => {
+    const r = roomRef.current;
+    if (!r?.pending_action) return;
+    const pa = r.pending_action;
+    const jsnCard = handRef.current.find((c) => c.id === jsnCardId);
+    if (!jsnCard) return;
+
+    const newHand = handRef.current.filter((c) => c.id !== jsnCardId);
+    const discard = [...r.discard_pile, jsnCard];
+    const updatedPa: MDPendingAction = { ...pa, jsnCount: pa.jsnCount + 1 };
+
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, { discard_pile: discard, pending_action: updatedPa }),
+    ]);
+    setMyHand(newHand);
+  }, [myPlayerId]);
+
+  // Accept cancellation (actor sees JSN odd count, accepts)
+  const acceptCancellation = useCallback(async () => {
+    const r = roomRef.current;
+    if (!r?.pending_action) return;
     await updateMDRoom(r.room_code, { pending_action: null });
   }, []);
 
-  const resolveActionEffect = useCallback(async () => {
+  // ─── Payment ───────────────────────────────────────────────────────────────
+
+  const submitPayment = useCallback(async (cardIds: string[]) => {
     const r = roomRef.current;
-    if (!r || !r.pending_action) return;
-
+    if (!r?.pending_action) return;
     const pa = r.pending_action;
-    let players = [...r.players];
+    const [task, ...restQueue] = pa.queue;
+    if (!task || task.playerId !== myPlayerId) return;
 
-    if (pa.actionType === 'deal_breaker' && pa.targetPlayerId && pa.targetColor) {
-      // Transfer entire set
-      const targetIdx = players.findIndex((p) => p.id === pa.targetPlayerId);
-      const actorIdx = players.findIndex((p) => p.id === pa.actorId);
-      if (targetIdx === -1 || actorIdx === -1) {
-        await updateMDRoom(r.room_code, { pending_action: null });
-        return;
+    const payer = r.players.find((p) => p.id === myPlayerId)!;
+    const actor = r.players.find((p) => p.id === pa.actorId)!;
+
+    // Collect selected cards from payer's bank + sets
+    const selectedCards: MDCard[] = [];
+    let newPayer = { ...payer, bank: safeBank(payer), sets: { ...safeSets(payer) } };
+
+    for (const id of cardIds) {
+      // Try bank first
+      const [np1, c1] = takeFromBank(newPayer, id);
+      if (c1) { newPayer = np1; selectedCards.push(c1); continue; }
+      // Try sets
+      for (const color of ALL_COLORS) {
+        const [np2, c2] = takeFromSet(newPayer, id, color);
+        if (c2) { newPayer = np2; selectedCards.push(c2); break; }
       }
-
-      const targetSets = players[targetIdx].sets ?? {};
-      const setToSteal = targetSets[pa.targetColor] ?? [];
-      const newTargetSets = { ...targetSets };
-      delete newTargetSets[pa.targetColor];
-      players[targetIdx] = { ...players[targetIdx], sets: newTargetSets };
-
-      const actorSets = players[actorIdx].sets ?? {};
-      const actorExisting = actorSets[pa.targetColor] ?? [];
-      players[actorIdx] = {
-        ...players[actorIdx],
-        sets: { ...actorSets, [pa.targetColor]: [...actorExisting, ...setToSteal] },
-      };
-
-    } else if (pa.actionType === 'forced_deal' && pa.actorCardId && pa.actorCardColor && pa.targetCardId && pa.targetCardColor && pa.targetPlayerId) {
-      const actorIdx = players.findIndex((p) => p.id === pa.actorId);
-      const targetIdx = players.findIndex((p) => p.id === pa.targetPlayerId);
-      if (actorIdx === -1 || targetIdx === -1) {
-        await updateMDRoom(r.room_code, { pending_action: null });
-        return;
-      }
-
-      // Find actor card
-      const actorCardResult = findCardInSets(players[actorIdx], pa.actorCardId);
-      const targetCardResult = findCardInSets(players[targetIdx], pa.targetCardId);
-
-      if (!actorCardResult || !targetCardResult) {
-        await updateMDRoom(r.room_code, { pending_action: null });
-        return;
-      }
-
-      // Remove actor card from actor, add to target
-      players[actorIdx] = removeCardFromSet(players[actorIdx], pa.actorCardId, actorCardResult.color);
-      players[targetIdx] = addCardToSet(players[targetIdx], actorCardResult.card, actorCardResult.color);
-
-      // Remove target card from target, add to actor
-      players[targetIdx] = removeCardFromSet(players[targetIdx], pa.targetCardId, targetCardResult.color);
-      players[actorIdx] = addCardToSet(players[actorIdx], targetCardResult.card, targetCardResult.color);
-
-    } else if (pa.actionType === 'sly_deal' && pa.stolenCardId && pa.stolenCardColor && pa.stolenFromPlayerId) {
-      const fromIdx = players.findIndex((p) => p.id === pa.stolenFromPlayerId);
-      const toIdx = players.findIndex((p) => p.id === pa.actorId);
-      if (fromIdx === -1 || toIdx === -1) {
-        await updateMDRoom(r.room_code, { pending_action: null });
-        return;
-      }
-
-      const stolenSet = (players[fromIdx].sets ?? {})[pa.stolenCardColor] ?? [];
-      const stolenCard = stolenSet.find((c) => c.id === pa.stolenCardId);
-      if (!stolenCard) {
-        await updateMDRoom(r.room_code, { pending_action: null });
-        return;
-      }
-
-      players[fromIdx] = removeCardFromSet(players[fromIdx], pa.stolenCardId, pa.stolenCardColor);
-      players[toIdx] = addCardToSet(players[toIdx], stolenCard, pa.stolenCardColor);
-
-    } else if (pa.paymentQueue.length > 0) {
-      // Payment action — move to payment phase (pending action stays, payment happens)
-      // Nothing to do here — payment is handled by submitPayment
-      return;
     }
 
-    const winnerId = checkWin(players);
+    // Give selected cards to actor's bank
+    let newActor = { ...actor, bank: [...safeBank(actor), ...selectedCards], sets: { ...safeSets(actor) } };
 
-    // If it's a payment action, keep pending to process payments
-    if (pa.paymentQueue.length > 0 && (pa.actionType === 'birthday' || pa.actionType === 'debt_collector' || pa.actionType === 'rent' || pa.actionType === 'wild_rent')) {
-      // Keep pending_action, just update players in case needed
-      await updateMDRoom(r.room_code, {
-        players,
-        status: winnerId ? 'finished' : 'playing',
-        winner_id: winnerId ?? null,
-      });
-      return;
-    }
+    let players = updatePlayer(r.players, myPlayerId, () => newPayer);
+    players = updatePlayer(players, pa.actorId, () => newActor);
+
+    const winner = checkWinner(players);
+    const newPa = restQueue.length > 0
+      ? { ...pa, queue: restQueue, jsnCount: 0 }
+      : null;
 
     await updateMDRoom(r.room_code, {
       players,
-      pending_action: null,
-      status: winnerId ? 'finished' : 'playing',
-      winner_id: winnerId ?? null,
+      pending_action: newPa,
+      status: winner ? 'finished' : 'playing',
+      winner_id: winner ?? null,
     });
-  }, []);
+    setPaymentSelection([]);
+  }, [myPlayerId]);
 
-  const submitPayment = useCallback(
-    async (selectedCardIds: string[]) => {
-      const r = roomRef.current;
-      if (!r || !r.pending_action) return;
+  // ─── Move wild card ────────────────────────────────────────────────────────
 
-      const pa = r.pending_action;
-      const currentPayer = pa.paymentQueue[pa.currentPayerIndex];
-      if (!currentPayer || currentPayer.playerId !== myPlayerId) return;
+  const moveWild = useCallback(async (cardId: string, fromColor: PropertyColor, toColor: PropertyColor) => {
+    const r = roomRef.current;
+    if (!r) return;
+    const me = r.players.find((p) => p.id === myPlayerId);
+    if (!me) return;
 
-      let players = [...r.players];
-      const payerIdx = players.findIndex((p) => p.id === myPlayerId);
-      const actorIdx = players.findIndex((p) => p.id === pa.actorId);
-      if (payerIdx === -1 || actorIdx === -1) return;
+    const [newMe, card] = takeFromSet(me, cardId, fromColor);
+    if (!card) return;
 
-      const payer = players[payerIdx];
-      const actor = players[actorIdx];
+    const updatedMe = addToSet(newMe, card, toColor);
+    const players = updatePlayer(r.players, myPlayerId, () => updatedMe);
+    await updateMDRoom(r.room_code, { players });
+  }, [myPlayerId]);
 
-      // Gather all payable cards (null-safe for Supabase JSONB)
-      const payerBank = payer.bank ?? [];
-      const payerSets = payer.sets ?? {};
-      const allPayableCards: MDCard[] = [
-        ...payerBank,
-        ...Object.values(payerSets).flat().filter((c): c is MDCard => c != null),
-      ];
-
-      const selectedCards = allPayableCards.filter((c) => selectedCardIds.includes(c.id));
-
-      // Remove selected cards from payer
-      let newPayer = { ...payer, bank: payerBank, sets: payerSets };
-
-      // Remove from bank
-      newPayer = {
-        ...newPayer,
-        bank: newPayer.bank.filter((c) => !selectedCardIds.includes(c.id)),
-      };
-
-      // Remove from sets
-      const newSets: typeof newPayer.sets = {};
-      for (const color of ALL_COLORS) {
-        const set = (newPayer.sets ?? {})[color];
-        if (set) {
-          const filtered = set.filter((c) => !selectedCardIds.includes(c.id));
-          if (filtered.length > 0) newSets[color] = filtered;
-        }
-      }
-      newPayer = { ...newPayer, sets: newSets };
-
-      // Add to actor (null-safe)
-      let newActor = { ...actor, bank: actor.bank ?? [], sets: actor.sets ?? {} };
-      for (const card of selectedCards) {
-        if (card.type === 'money' || card.type === 'action') {
-          // Money and action cards go to actor's bank at face value
-          newActor = { ...newActor, bank: [...newActor.bank, card] };
-        } else if (card.type === 'property' && card.color) {
-          newActor = addCardToSet(newActor, card, card.color);
-        } else if (card.type === 'wildProperty') {
-          // Keep wild in the color it was assigned when paid
-          let payerColor: PropertyColor | null = null;
-          for (const color of ALL_COLORS) {
-            if (payerSets[color]?.find((c) => c.id === card.id)) {
-              payerColor = color;
-              break;
-            }
-          }
-          if (payerColor) {
-            newActor = addCardToSet(newActor, card, payerColor);
-          } else {
-            const validColors = card.isRainbow ? ALL_COLORS : (card.wildColors ?? []);
-            if (validColors.length > 0) newActor = addCardToSet(newActor, card, validColors[0]);
-          }
-        }
-      }
-
-      players[payerIdx] = newPayer;
-      players[actorIdx] = newActor;
-
-      // Mark paid
-      const newQueue = pa.paymentQueue.map((item, idx) =>
-        idx === pa.currentPayerIndex ? { ...item, paid: true } : item
-      );
-
-      const nextIndex = pa.currentPayerIndex + 1;
-      const allPaid = nextIndex >= newQueue.length;
-
-      const winnerId = checkWin(players);
-
-      if (allPaid || winnerId) {
-        await updateMDRoom(r.room_code, {
-          players,
-          pending_action: null,
-          status: winnerId ? 'finished' : 'playing',
-          winner_id: winnerId ?? null,
-        });
-      } else {
-        // Move to next payer
-        const updatedPending: MDPendingAction = {
-          ...pa,
-          paymentQueue: newQueue,
-          currentPayerIndex: nextIndex,
-          jsnCount: 0, // Reset JSN for next payer
-        };
-        await updateMDRoom(r.room_code, {
-          players,
-          pending_action: updatedPending,
-          status: winnerId ? 'finished' : 'playing',
-          winner_id: winnerId ?? null,
-        });
-      }
-
-      setPaymentSelection([]);
-    },
-    [myPlayerId]
-  );
-
-  const moveWild = useCallback(
-    async (cardId: string, fromColor: PropertyColor, toColor: PropertyColor) => {
-      const r = roomRef.current;
-      if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
-
-      const players = r.players.map((p) => {
-        if (p.id !== myPlayerId) return p;
-        const card = ((p.sets ?? {})[fromColor] ?? []).find((c) => c.id === cardId);
-        if (!card) return p;
-        let updated = removeCardFromSet(p, cardId, fromColor);
-        updated = addCardToSet(updated, card, toColor);
-        return updated;
-      });
-
-      await updateMDRoom(r.room_code, { players });
-    },
-    [myPlayerId]
-  );
+  // ─── End turn ──────────────────────────────────────────────────────────────
 
   const endTurn = useCallback(async () => {
     const r = roomRef.current;
-    const hand = myHandRef.current;
+    const hand = handRef.current;
     if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
+    if (!r.turn_drawn || r.pending_action) return;
 
+    // Must discard to 7
     if (hand.length > 7) {
       setIsDiscardMode(true);
       return;
@@ -923,43 +534,62 @@ export function useMonopolyDealGame() {
       turn_drawn: false,
       pending_action: null,
     });
+    drawnRef.current = false;
   }, [myPlayerId]);
 
-  const discardCard = useCallback(
-    async (card: MDCard) => {
-      const r = roomRef.current;
-      const hand = myHandRef.current;
-      if (!r || !isDiscardMode) return;
-
-      const newHand = hand.filter((c) => c.id !== card.id);
-
-      await Promise.all([
-        updateMDHand(r.id, myPlayerId, newHand),
-        updateMDRoom(r.room_code, {
-          discard_pile: [...r.discard_pile, card],
-        }),
-      ]);
-      setMyHand(newHand);
-
-      if (newHand.length <= 7) {
-        setIsDiscardMode(false);
-        const nextIndex = (r.current_player_index + 1) % r.players.length;
-        await updateMDRoom(r.room_code, {
-          current_player_index: nextIndex,
-          cards_played_this_turn: 0,
-          turn_drawn: false,
-          pending_action: null,
-        });
-      }
-    },
-    [myPlayerId, isDiscardMode]
-  );
-
-  const syncYoutubeUrl = useCallback(async (url: string) => {
+  const discardCard = useCallback(async (card: MDCard) => {
     const r = roomRef.current;
+    const hand = handRef.current;
     if (!r) return;
-    await updateMDRoom(r.room_code, { youtube_url: url });
-  }, []);
+    const newHand = hand.filter((c) => c.id !== card.id);
+    const discard = [...r.discard_pile, card];
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, newHand),
+      updateMDRoom(r.room_code, { discard_pile: discard }),
+    ]);
+    setMyHand(newHand);
+    if (newHand.length <= 7) {
+      setIsDiscardMode(false);
+      const nextIndex = (r.current_player_index + 1) % r.players.length;
+      await updateMDRoom(r.room_code, {
+        current_player_index: nextIndex,
+        cards_played_this_turn: 0,
+        turn_drawn: false,
+        pending_action: null,
+      });
+      drawnRef.current = false;
+    }
+  }, [myPlayerId]);
+
+  // ─── Room management ───────────────────────────────────────────────────────
+
+  const createRoom = useCallback(async (playerName: string) => {
+    setLoading(true); setError(null);
+    const room = await createMDRoom(playerName, myPlayerId);
+    if (room) setRoom(normalizeRoom(room));
+    else setError('Impossible de créer la room.');
+    setLoading(false);
+  }, [myPlayerId]);
+
+  const joinRoom = useCallback(async (roomCode: string, playerName: string) => {
+    setLoading(true); setError(null);
+    const joined = await joinMDRoom(roomCode, playerName, myPlayerId);
+    if (joined) {
+      const fresh = await getMDRoom(roomCode);
+      setRoom(normalizeRoom(fresh ?? joined));
+    } else {
+      setError('Room introuvable ou déjà en cours (max 5 joueurs).');
+    }
+    setLoading(false);
+  }, [myPlayerId]);
+
+  const startGame = useCallback(async () => {
+    const r = roomRef.current;
+    if (!r || r.host_id !== myPlayerId || r.players.length < 2) return;
+    setLoading(true);
+    await startMDGame(r.room_code, r.id, r.players);
+    setLoading(false);
+  }, [myPlayerId]);
 
   const leaveRoom = useCallback(() => {
     setRoom(null);
@@ -967,74 +597,48 @@ export function useMonopolyDealGame() {
     setPendingPlay(null);
     setPaymentSelection([]);
     setIsDiscardMode(false);
+    drawnRef.current = false;
   }, []);
 
-  // Determine if it's my turn to respond to a pending action
+  const syncYoutubeUrl = useCallback(async (url: string) => {
+    const r = roomRef.current;
+    if (!r) return;
+    await updateMDRoom(r.room_code, { youtube_url: url });
+  }, []);
+
+  // ─── Derived state for UI ──────────────────────────────────────────────────
+
   const isMyTurnToRespond = (() => {
     if (!room?.pending_action) return false;
     const pa = room.pending_action;
-
-    // Payment actions: it's my turn if I'm the current payer and jsnCount is even
-    if (
-      pa.paymentQueue.length > 0 &&
-      pa.currentPayerIndex < pa.paymentQueue.length &&
-      pa.jsnCount % 2 === 0
-    ) {
-      return pa.paymentQueue[pa.currentPayerIndex].playerId === myPlayerId;
+    const isEvenJsn = pa.jsnCount % 2 === 0;
+    if (isEvenJsn) {
+      // Target / current payer acts
+      const task = pa.queue[0];
+      return task?.playerId === myPlayerId;
+    } else {
+      // Odd: actor can counter-JSN or accept cancellation
+      return pa.actorId === myPlayerId;
     }
-
-    // Non-payment actions (deal_breaker, forced_deal, sly_deal)
-    if (pa.targetPlayerId && pa.jsnCount % 2 === 0) {
-      return pa.targetPlayerId === myPlayerId;
-    }
-
-    // Actor can counter-JSN when jsnCount is odd
-    if (pa.jsnCount % 2 === 1 && pa.actorId === myPlayerId) {
-      return true;
-    }
-
-    return false;
   })();
 
   const hasJSNInHand = myHand.some((c) => c.action === 'just_say_no');
 
   return {
-    room,
-    myHand,
-    myPlayerId,
-    loading,
-    error,
-    isMyTurn,
-    isMyTurnToRespond,
-    hasJSNInHand,
-    pendingPlay,
-    paymentSelection,
-    setPaymentSelection,
+    room, myHand, myPlayerId, loading, error,
+    isMyTurn, isMyTurnToRespond, hasJSNInHand,
+    pendingPlay, setPendingPlay,
+    paymentSelection, setPaymentSelection,
     isDiscardMode,
-    createRoom,
-    joinRoom,
-    startGame,
-    drawCards,
-    playActionAsMoney,
-    playMoney,
-    playProperty,
+    // actions
+    createRoom, joinRoom, startGame, leaveRoom,
+    drawCards, playMoney, playProperty, playActionAsMoney,
     initiateAction,
-    commitBirthday,
-    commitDebtCollector,
-    commitRent,
-    commitDealBreaker,
-    commitForcedDeal,
-    commitSlyDeal,
-    respondJSN,
-    acceptCancellation,
-    resolveActionEffect,
-    submitPayment,
-    moveWild,
-    endTurn,
-    discardCard,
+    commitDebt, commitRent,
+    commitDealBreaker, commitSlyDeal, commitForcedDeal,
+    respondJSN, acceptCancellation,
+    submitPayment, moveWild,
+    endTurn, discardCard,
     syncYoutubeUrl,
-    leaveRoom,
-    setPendingPlay,
-    isConfigured: isSupabaseConfigured,
   };
 }
