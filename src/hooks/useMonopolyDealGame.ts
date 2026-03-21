@@ -26,6 +26,7 @@ import {
 } from '../lib/monopolyDealSupabase';
 
 export type PendingPlayStep =
+  | { type: 'action_choice'; card: MDCard }
   | { type: 'color_picker'; card: MDCard }
   | { type: 'rent_config'; card: MDCard; doubleRentCard?: MDCard }
   | { type: 'wild_rent_target'; card: MDCard; rentColor: PropertyColor; doubleRentCard?: MDCard }
@@ -61,7 +62,17 @@ export function useMonopolyDealGame() {
     if (!room?.room_code || !room?.id) return;
     const roomCode = room.room_code;
     const roomId = room.id;
-    const unsubRoom = subscribeToMDRoom(roomCode, setRoom);
+    const unsubRoom = subscribeToMDRoom(roomCode, (updatedRoom) => {
+      // Normalize JSONB data — bank/sets may come back as null from Supabase
+      setRoom({
+        ...updatedRoom,
+        players: updatedRoom.players.map((p) => ({
+          ...p,
+          bank: p.bank ?? [],
+          sets: p.sets ?? {},
+        })),
+      });
+    });
     const unsubHand = subscribeToMDHand(roomId, myPlayerId, setMyHand);
     return () => {
       unsubRoom();
@@ -130,8 +141,9 @@ export function useMonopolyDealGame() {
   }
 
   function findCardInSets(player: MDPlayer, cardId: string): { color: PropertyColor; card: MDCard } | null {
+    const sets = player.sets ?? {};
     for (const color of ALL_COLORS) {
-      const set = player.sets[color];
+      const set = sets[color];
       if (set) {
         const card = set.find((c) => c.id === cardId);
         if (card) return { color, card };
@@ -141,9 +153,10 @@ export function useMonopolyDealGame() {
   }
 
   function removeCardFromSet(player: MDPlayer, cardId: string, color: PropertyColor): MDPlayer {
-    const set = player.sets[color] ?? [];
+    const sets = player.sets ?? {};
+    const set = sets[color] ?? [];
     const newSet = set.filter((c) => c.id !== cardId);
-    const newSets = { ...player.sets };
+    const newSets = { ...sets };
     if (newSet.length === 0) {
       delete newSets[color];
     } else {
@@ -153,10 +166,11 @@ export function useMonopolyDealGame() {
   }
 
   function addCardToSet(player: MDPlayer, card: MDCard, color: PropertyColor): MDPlayer {
-    const set = player.sets[color] ?? [];
+    const sets = player.sets ?? {};
+    const set = sets[color] ?? [];
     return {
       ...player,
-      sets: { ...player.sets, [color]: [...set, card] },
+      sets: { ...sets, [color]: [...set, card] },
     };
   }
 
@@ -233,6 +247,37 @@ export function useMonopolyDealGame() {
     setMyHand(newHand);
   }, [myPlayerId]);
 
+  const playActionAsMoney = useCallback(
+    async (card: MDCard) => {
+      const r = roomRef.current;
+      const hand = myHandRef.current;
+      if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
+      if (r.cards_played_this_turn >= 3) return;
+      if (!r.turn_drawn) return;
+
+      const newHand = hand.filter((c) => c.id !== card.id);
+      const players = r.players.map((p) => {
+        if (p.id !== myPlayerId) return p;
+        return { ...p, bank: [...(p.bank ?? []), card] };
+      });
+
+      const winnerId = checkWin(players);
+      setPendingPlay(null);
+
+      await Promise.all([
+        updateMDHand(r.id, myPlayerId, newHand),
+        updateMDRoom(r.room_code, {
+          players,
+          cards_played_this_turn: r.cards_played_this_turn + 1,
+          status: winnerId ? 'finished' : 'playing',
+          winner_id: winnerId ?? null,
+        }),
+      ]);
+      setMyHand(newHand);
+    },
+    [myPlayerId]
+  );
+
   const playMoney = useCallback(
     async (card: MDCard) => {
       const r = roomRef.current;
@@ -244,7 +289,7 @@ export function useMonopolyDealGame() {
       const newHand = hand.filter((c) => c.id !== card.id);
       const players = r.players.map((p) => {
         if (p.id !== myPlayerId) return p;
-        return { ...p, bank: [...p.bank, card] };
+        return { ...p, bank: [...(p.bank ?? []), card] };
       });
 
       const winnerId = checkWin(players);
@@ -274,10 +319,11 @@ export function useMonopolyDealGame() {
       const newHand = hand.filter((c) => c.id !== card.id);
       const players = r.players.map((p) => {
         if (p.id !== myPlayerId) return p;
-        const existingSet = p.sets[color] ?? [];
+        const sets = p.sets ?? {};
+        const existingSet = sets[color] ?? [];
         return {
           ...p,
-          sets: { ...p.sets, [color]: [...existingSet, card] },
+          sets: { ...sets, [color]: [...existingSet, card] },
         };
       });
 
@@ -644,15 +690,17 @@ export function useMonopolyDealGame() {
         return;
       }
 
-      const setToSteal = players[targetIdx].sets[pa.targetColor] ?? [];
-      const newTargetSets = { ...players[targetIdx].sets };
+      const targetSets = players[targetIdx].sets ?? {};
+      const setToSteal = targetSets[pa.targetColor] ?? [];
+      const newTargetSets = { ...targetSets };
       delete newTargetSets[pa.targetColor];
       players[targetIdx] = { ...players[targetIdx], sets: newTargetSets };
 
-      const actorExisting = players[actorIdx].sets[pa.targetColor] ?? [];
+      const actorSets = players[actorIdx].sets ?? {};
+      const actorExisting = actorSets[pa.targetColor] ?? [];
       players[actorIdx] = {
         ...players[actorIdx],
-        sets: { ...players[actorIdx].sets, [pa.targetColor]: [...actorExisting, ...setToSteal] },
+        sets: { ...actorSets, [pa.targetColor]: [...actorExisting, ...setToSteal] },
       };
 
     } else if (pa.actionType === 'forced_deal' && pa.actorCardId && pa.actorCardColor && pa.targetCardId && pa.targetCardColor && pa.targetPlayerId) {
@@ -688,7 +736,7 @@ export function useMonopolyDealGame() {
         return;
       }
 
-      const stolenSet = players[fromIdx].sets[pa.stolenCardColor] ?? [];
+      const stolenSet = (players[fromIdx].sets ?? {})[pa.stolenCardColor] ?? [];
       const stolenCard = stolenSet.find((c) => c.id === pa.stolenCardId);
       if (!stolenCard) {
         await updateMDRoom(r.room_code, { pending_action: null });
@@ -742,16 +790,18 @@ export function useMonopolyDealGame() {
       const payer = players[payerIdx];
       const actor = players[actorIdx];
 
-      // Gather all payable cards
+      // Gather all payable cards (null-safe for Supabase JSONB)
+      const payerBank = payer.bank ?? [];
+      const payerSets = payer.sets ?? {};
       const allPayableCards: MDCard[] = [
-        ...payer.bank,
-        ...Object.values(payer.sets).flat(),
+        ...payerBank,
+        ...Object.values(payerSets).flat().filter((c): c is MDCard => c != null),
       ];
 
       const selectedCards = allPayableCards.filter((c) => selectedCardIds.includes(c.id));
 
       // Remove selected cards from payer
-      let newPayer = { ...payer };
+      let newPayer = { ...payer, bank: payerBank, sets: payerSets };
 
       // Remove from bank
       newPayer = {
@@ -770,21 +820,19 @@ export function useMonopolyDealGame() {
       }
       newPayer = { ...newPayer, sets: newSets };
 
-      // Add to actor
-      let newActor = { ...actor };
+      // Add to actor (null-safe)
+      let newActor = { ...actor, bank: actor.bank ?? [], sets: actor.sets ?? {} };
       for (const card of selectedCards) {
-        if (card.type === 'money') {
+        if (card.type === 'money' || card.type === 'action') {
+          // Money and action cards go to actor's bank at face value
           newActor = { ...newActor, bank: [...newActor.bank, card] };
-        } else if (card.type === 'property') {
-          const col = card.color!;
-          newActor = addCardToSet(newActor, card, col);
+        } else if (card.type === 'property' && card.color) {
+          newActor = addCardToSet(newActor, card, card.color);
         } else if (card.type === 'wildProperty') {
-          // Use the color it was in when paid
-          // Find it in payer original sets to know color
+          // Keep wild in the color it was assigned when paid
           let payerColor: PropertyColor | null = null;
           for (const color of ALL_COLORS) {
-            const set = payer.sets[color];
-            if (set?.find((c) => c.id === card.id)) {
+            if (payerSets[color]?.find((c) => c.id === card.id)) {
               payerColor = color;
               break;
             }
@@ -792,16 +840,9 @@ export function useMonopolyDealGame() {
           if (payerColor) {
             newActor = addCardToSet(newActor, card, payerColor);
           } else {
-            // fallback: treat as money-like into bank? No - add to first valid color
             const validColors = card.isRainbow ? ALL_COLORS : (card.wildColors ?? []);
-            if (validColors.length > 0) {
-              newActor = addCardToSet(newActor, card, validColors[0]);
-            }
+            if (validColors.length > 0) newActor = addCardToSet(newActor, card, validColors[0]);
           }
-        } else {
-          // action cards used as payment go to bank as face value? No — to discard
-          // Actually in standard rules, action/wild used as payment = treated as $
-          // But here we put money cards in bank
         }
       }
 
@@ -853,7 +894,7 @@ export function useMonopolyDealGame() {
 
       const players = r.players.map((p) => {
         if (p.id !== myPlayerId) return p;
-        const card = (p.sets[fromColor] ?? []).find((c) => c.id === cardId);
+        const card = ((p.sets ?? {})[fromColor] ?? []).find((c) => c.id === cardId);
         if (!card) return p;
         let updated = removeCardFromSet(p, cardId, fromColor);
         updated = addCardToSet(updated, card, toColor);
@@ -974,6 +1015,7 @@ export function useMonopolyDealGame() {
     joinRoom,
     startGame,
     drawCards,
+    playActionAsMoney,
     playMoney,
     playProperty,
     initiateAction,

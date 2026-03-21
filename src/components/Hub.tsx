@@ -1,4 +1,5 @@
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
 
 interface HubProps {
@@ -37,7 +38,26 @@ const games = [
 
 const comingSoon: { name: string; description: string; emoji: string; accent: string }[] = [];
 
+const MD_RULES = [
+  { title: 'But du jeu', body: 'Être le premier à former 3 sets complets de propriétés.' },
+  { title: 'Tour de jeu', body: 'Piochez 2 cartes (5 si votre main est vide). Jouez jusqu\'à 3 cartes. Défaussez si vous avez plus de 7 cartes en main.' },
+  { title: 'Jouer une carte', body: 'Propriété → dans vos sets. Argent → dans votre banque. Carte action → effet immédiat. N\'importe quelle carte → banque pour sa valeur en $.' },
+  { title: 'Loyer', body: 'Collectez un loyer auprès des autres joueurs selon le nombre de propriétés dans la couleur choisie.' },
+  { title: 'Double Loyer', body: 'Jouez avec un loyer pour doubler le montant (compte comme 1 carte jouée supplémentaire).' },
+  { title: 'Loyer Universel', body: 'Choisissez une couleur ET un joueur ciblé.' },
+  { title: 'Percepteur', body: 'Collectez $5M auprès d\'un joueur de votre choix.' },
+  { title: 'Anniversaire', body: 'Collectez $2M auprès de TOUS les autres joueurs.' },
+  { title: 'Saisie', body: 'Volez 1 propriété dans un set INCOMPLET d\'un adversaire.' },
+  { title: 'Échange Forcé', body: 'Échangez une de vos propriétés (set incomplet) contre une propriété d\'un adversaire (set incomplet).' },
+  { title: 'Coup de Maître', body: 'Volez un set COMPLET entier d\'un adversaire.' },
+  { title: 'Non Merci !', body: 'Annule n\'importe quelle action jouée contre vous. Peut être contré avec un autre Non Merci ! (chaîne).' },
+  { title: 'Paiement', body: 'Payez depuis votre banque et/ou vos sets de propriétés. Si vous ne pouvez pas tout payer, donnez tout ce que vous avez.' },
+  { title: 'Jokers de propriété', body: 'Peuvent être placés dans l\'une de leurs couleurs valides. Déplaçables librement entre ces couleurs pendant votre tour (action gratuite).' },
+];
+
 export function Hub({ onSelectGame }: HubProps) {
+  const [showMDRules, setShowMDRules] = useState(false);
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -135,10 +155,85 @@ export function Hub({ onSelectGame }: HubProps) {
           ))}
         </motion.div>
 
+        <motion.div variants={itemVariants} style={{ textAlign: 'center' }}>
+          <button
+            onClick={() => setShowMDRules(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#22c55e',
+              fontSize: 12,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+              padding: '2px 8px',
+            }}
+          >
+            📋 Règles du Monopoly Deal
+          </button>
+        </motion.div>
+
         <motion.p className="menu-footer" variants={itemVariants}>
           Plus de jeux à venir !
         </motion.p>
       </motion.div>
+
+      {/* Monopoly Deal Rules Modal */}
+      <AnimatePresence>
+        {showMDRules && (
+          <motion.div
+            className="md-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowMDRules(false)}
+            style={{ zIndex: 200, alignItems: 'flex-start', paddingTop: 24, paddingBottom: 24, overflowY: 'auto' }}
+          >
+            <motion.div
+              className="md-modal"
+              style={{ maxWidth: 480, width: '92%', maxHeight: '80vh', overflowY: 'auto' }}
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                  🎩 Règles — Monopoly Deal
+                </h2>
+                <button
+                  onClick={() => setShowMDRules(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {MD_RULES.map((rule) => (
+                  <div
+                    key={rule.title}
+                    style={{
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      borderLeft: '3px solid #22c55e',
+                    }}
+                  >
+                    <p style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', margin: '0 0 2px' }}>
+                      {rule.title}
+                    </p>
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.4 }}>
+                      {rule.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 14, textAlign: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+                2–5 joueurs · 96 cartes · Premier à 3 sets complets
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -329,15 +329,16 @@ export function getRent(color: PropertyColor, cardCount: number): number {
 
 export function countCompleteSets(player: MDPlayer): number {
   let count = 0;
+  const sets = player.sets ?? {};
   for (const color of ALL_COLORS) {
-    const cards = player.sets[color];
-    if (cards && isSetComplete(color, cards)) count++;
+    const cards = sets[color];
+    if (cards && cards.length > 0 && isSetComplete(color, cards)) count++;
   }
   return count;
 }
 
 export function getBankTotal(player: MDPlayer): number {
-  return player.bank.reduce((sum, c) => sum + c.value, 0);
+  return (player.bank ?? []).reduce((sum, c) => sum + (c?.value ?? 0), 0);
 }
 
 export function getOrCreatePlayerId(): string {

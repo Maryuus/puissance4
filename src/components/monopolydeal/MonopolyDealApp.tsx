@@ -25,6 +25,7 @@ export function MonopolyDealApp({ onGoBack }: MonopolyDealAppProps) {
     createRoom,
     joinRoom,
     startGame,
+    playActionAsMoney,
     playMoney,
     playProperty,
     initiateAction,
@@ -62,6 +63,7 @@ export function MonopolyDealApp({ onGoBack }: MonopolyDealAppProps) {
         paymentSelection={paymentSelection}
         setPaymentSelection={setPaymentSelection}
         isDiscardMode={isDiscardMode}
+        onPlayActionAsMoney={playActionAsMoney}
         onPlayMoney={playMoney}
         onPlayProperty={playProperty}
         onInitiateAction={initiateAction}

@@ -29,6 +29,7 @@ interface MonopolyDealGameProps {
   paymentSelection: MDCard[];
   setPaymentSelection: (cards: MDCard[]) => void;
   isDiscardMode: boolean;
+  onPlayActionAsMoney: (card: MDCard) => void;
   onPlayMoney: (card: MDCard) => void;
   onPlayProperty: (card: MDCard, color: PropertyColor) => void;
   onInitiateAction: (card: MDCard) => void;
@@ -66,7 +67,7 @@ function PlayerArea({ player, isCurrentTurn }: { player: MDPlayer; isCurrentTurn
       </div>
       <div className="md-player-sets">
         {ALL_COLORS.map((color) => {
-          const cards = player.sets[color];
+          const cards = (player.sets ?? {})[color];
           if (!cards || cards.length === 0) return null;
           const complete = isSetComplete(color, cards);
           return (
@@ -84,7 +85,7 @@ function PlayerArea({ player, isCurrentTurn }: { player: MDPlayer; isCurrentTurn
             </div>
           );
         })}
-        {Object.values(player.sets).every((s) => !s || s.length === 0) && (
+        {Object.values(player.sets ?? {}).every((s) => !s || s.length === 0) && (
           <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Aucune propriété</span>
         )}
       </div>
@@ -106,7 +107,7 @@ function PropertySetDisplay({
   return (
     <div className="md-sets-area">
       {ALL_COLORS.map((color) => {
-        const cards = player.sets[color] ?? [];
+        const cards = (player.sets ?? {})[color] ?? [];
         if (cards.length === 0) return null;
         const complete = isSetComplete(color, cards);
 
@@ -192,6 +193,7 @@ export function MonopolyDealGame({
   paymentSelection,
   setPaymentSelection,
   isDiscardMode,
+  onPlayActionAsMoney,
   onPlayMoney,
   onPlayProperty,
   onInitiateAction,
@@ -215,7 +217,7 @@ export function MonopolyDealGame({
   const [youtubeUrl, setYoutubeUrl] = useState(room.youtube_url ?? '');
   const [selectedDoubleRent, setSelectedDoubleRent] = useState<MDCard | null>(null);
 
-  const myPlayer = room.players.find((p) => p.id === myPlayerId)!;
+  const myPlayer = room.players.find((p) => p.id === myPlayerId);
   const otherPlayers = room.players.filter((p) => p.id !== myPlayerId);
   const currentPlayer = room.players[room.current_player_index];
 
@@ -235,9 +237,12 @@ export function MonopolyDealGame({
     currentPayer?.playerId === myPlayerId &&
     pa.jsnCount % 2 === 0;
 
-  // All cards the payer can use
+  // All cards the payer can use — defensive flat() to filter null values from JSONB
   const allPayableCards: MDCard[] = myPlayer
-    ? [...myPlayer.bank, ...Object.values(myPlayer.sets).flat()]
+    ? [
+        ...(myPlayer.bank ?? []),
+        ...Object.values(myPlayer.sets ?? {}).flat().filter((c): c is MDCard => c != null),
+      ]
     : [];
 
   const paymentTotal = paymentSelection.reduce((s, c) => s + c.value, 0);
@@ -258,11 +263,11 @@ export function MonopolyDealGame({
     } else if (card.type === 'property') {
       onPlayProperty(card, card.color!);
     } else if (card.type === 'wildProperty') {
-      // Need color picker
       setPendingPlay({ type: 'color_picker', card });
     } else if (card.type === 'action') {
-      if (card.action === 'just_say_no') return; // JSN can't be played normally
-      onInitiateAction(card);
+      // All action cards: show choice between playing as action or adding to bank
+      // (even just_say_no and double_rent can be banked for their cash value)
+      setPendingPlay({ type: 'action_choice', card });
     }
   }
 
@@ -416,11 +421,11 @@ export function MonopolyDealGame({
           </p>
 
           {/* Bank cards */}
-          {(myPlayer?.bank.length ?? 0) > 0 && (
+          {((myPlayer?.bank ?? []).length) > 0 && (
             <div style={{ marginBottom: 8 }}>
               <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Banque</p>
               <div className="md-hand-row">
-                {myPlayer?.bank.map((c) => (
+                {(myPlayer?.bank ?? []).map((c) => (
                   <MDCardComponent
                     key={c.id}
                     card={c}
@@ -443,7 +448,7 @@ export function MonopolyDealGame({
 
           {/* Property cards */}
           {ALL_COLORS.map((color) => {
-            const cards = myPlayer?.sets[color];
+            const cards = (myPlayer?.sets ?? {})[color];
             if (!cards || cards.length === 0) return null;
             return (
               <div key={color} style={{ marginBottom: 6 }}>
@@ -516,6 +521,52 @@ export function MonopolyDealGame({
     if (!pendingPlay) return null;
 
     switch (pendingPlay.type) {
+      case 'action_choice': {
+        const isJSN = pendingPlay.card.action === 'just_say_no';
+        const isDoubleRent = pendingPlay.card.action === 'double_rent';
+        const canPlayAsAction = !isJSN && !isDoubleRent;
+        return (
+          <div className="md-overlay" onClick={() => setPendingPlay(null)}>
+            <motion.div
+              className="md-modal"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+            >
+              <h3 className="md-modal-title">Que faire avec cette carte ?</h3>
+              <p className="md-modal-desc" style={{ fontSize: 12 }}>
+                {isJSN && 'Non Merci ! se joue en réaction — vous pouvez seulement la mettre à la banque.'}
+                {isDoubleRent && 'Double Loyer s\'utilise avec une carte Loyer — vous pouvez la mettre à la banque.'}
+                {canPlayAsAction && pendingPlay.card.label}
+              </p>
+              <div className="flex flex-col gap-2 mt-2">
+                {canPlayAsAction && (
+                  <button
+                    className="btn btn-primary w-full"
+                    onClick={() => {
+                      setPendingPlay(null);
+                      onInitiateAction(pendingPlay.card);
+                    }}
+                  >
+                    Jouer comme action
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost w-full"
+                  style={{ borderColor: '#22c55e', color: '#4ade80' }}
+                  onClick={() => onPlayActionAsMoney(pendingPlay.card)}
+                >
+                  Ajouter à la banque (${pendingPlay.card.value}M)
+                </button>
+                <button className="btn btn-ghost w-full" onClick={() => setPendingPlay(null)}>
+                  Annuler
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        );
+      }
+
       case 'color_picker': {
         const validColors = getValidWildPlacements(pendingPlay.card);
         return (
@@ -867,8 +918,10 @@ export function MonopolyDealGame({
       case 'forced_deal_their_card': {
         const targetP = room.players.find((p) => p.id === pendingPlay.targetPlayerId);
         if (!targetP) return null;
+        // Cannot take from complete sets (same rule as Sly Deal)
         const theirProps = ALL_COLORS.flatMap((color) => {
           const set = targetP.sets[color] ?? [];
+          if (isSetComplete(color, set)) return [];
           return set.map((c) => ({ card: c, color }));
         });
 
@@ -1133,7 +1186,7 @@ export function MonopolyDealGame({
       <div className="md-hand-section">
         <div className="md-hand-info">
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-            Main ({myHand.length}) · Banque: ${myPlayer ? getBankTotal(myPlayer) : 0}M
+            Main ({myHand.length}) · Banque: ${myPlayer ? getBankTotal(myPlayer) : 0}M · Plays: {room.cards_played_this_turn}/3
           </span>
           <div style={{ display: 'flex', gap: 6 }}>
             {canEndTurn && (
@@ -1151,11 +1204,8 @@ export function MonopolyDealGame({
                 key={card.id}
                 card={card}
                 size="md"
-                playable={isDiscardMode || (canPlayCard && card.action !== 'just_say_no' && card.action !== 'double_rent')}
-                disabled={
-                  !isDiscardMode &&
-                  (!canPlayCard || card.action === 'just_say_no')
-                }
+                playable={isDiscardMode || canPlayCard}
+                disabled={!isDiscardMode && !canPlayCard}
                 onClick={() => handleCardClick(card)}
               />
             ))}

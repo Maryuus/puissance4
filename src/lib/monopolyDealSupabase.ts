@@ -106,9 +106,10 @@ export async function joinMDRoom(
   if (error || !existing) return null;
 
   const room = existing as MDRoomRow;
+  // Allow reconnecting to any room the player is already a member of
+  if (room.players.find((p) => p.id === playerId)) return room;
   if (room.status !== 'waiting') return null;
   if (room.players.length >= 5) return null;
-  if (room.players.find((p) => p.id === playerId)) return room;
 
   const newPlayer: MDPlayer = {
     id: playerId,
@@ -151,26 +152,21 @@ export async function startMDGame(
   if (!supabase) return false;
 
   const deck = shuffleDeck(createMonopolyDealDeck());
-  let deckIndex = 0;
 
-  // Deal 5 cards to each player
+  // Create empty hand rows for all players (rows needed for subscription + update to work)
+  // Each player draws 5 automatically on their first turn (empty hand → draw 5 rule)
   for (const player of players) {
-    const hand = deck.slice(deckIndex, deckIndex + 5);
-    deckIndex += 5;
-
     const { error } = await supabase
       .from('monopoly_deal_hands')
       .upsert(
-        { room_id: roomId, player_id: player.id, cards: hand },
+        { room_id: roomId, player_id: player.id, cards: [] },
         { onConflict: 'room_id,player_id' }
       );
     if (error) {
-      console.error('Error dealing hand:', error);
+      console.error('Error creating hand row:', error);
       return false;
     }
   }
-
-  const remaining = deck.slice(deckIndex);
 
   // Reset player bank/sets for fresh start
   const freshPlayers = players.map((p) => ({ ...p, bank: [], sets: {} }));
@@ -180,11 +176,11 @@ export async function startMDGame(
     .update({
       status: 'playing',
       players: freshPlayers,
-      deck: remaining,
+      deck,
       discard_pile: [],
       current_player_index: 0,
       cards_played_this_turn: 0,
-      turn_drawn: true,
+      turn_drawn: false,
       pending_action: null,
       winner_id: null,
     })
