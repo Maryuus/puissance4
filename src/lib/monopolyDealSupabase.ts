@@ -51,7 +51,7 @@ export async function createMDRoom(playerName: string, playerId: string): Promis
         room_code: code, host_id: playerId, status: 'waiting',
         players: [player], current_player_index: 0,
         deck: [], discard_pile: [], cards_played_this_turn: 0,
-        turn_drawn: false, pending_action: null, winner_id: null, youtube_url: null,
+        turn_drawn: false, pending_action: null, winner_id: null, youtube_url: '',
       })
       .select().single();
     if (!error && data) return data as MDRoomRow;
