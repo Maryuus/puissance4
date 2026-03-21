@@ -468,7 +468,7 @@ export function useMonopolyDealGame() {
       const myPlayer = r.players.find((p) => p.id === myPlayerId);
       if (!myPlayer) return;
 
-      const setCards = myPlayer.sets[rentColor] ?? [];
+      const setCards = (myPlayer.sets ?? {})[rentColor] ?? [];
       let rentAmount = getRent(rentColor, setCards.length);
       if (doubleRentCard) rentAmount *= 2;
 
@@ -812,7 +812,7 @@ export function useMonopolyDealGame() {
       // Remove from sets
       const newSets: typeof newPayer.sets = {};
       for (const color of ALL_COLORS) {
-        const set = newPayer.sets[color];
+        const set = (newPayer.sets ?? {})[color];
         if (set) {
           const filtered = set.filter((c) => !selectedCardIds.includes(c.id));
           if (filtered.length > 0) newSets[color] = filtered;

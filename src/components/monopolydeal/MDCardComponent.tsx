@@ -341,6 +341,7 @@ export function MDCardComponent({ card, size = 'md', playable, disabled, onClick
 
   return (
     <motion.div
+      className="md-card"
       onClick={!disabled ? onClick : undefined}
       whileHover={playable && !disabled ? { y: -6, scale: 1.05 } : {}}
       whileTap={!disabled && onClick ? { scale: 0.95 } : {}}

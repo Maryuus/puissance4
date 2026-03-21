@@ -153,7 +153,7 @@ function PropertySetDisplay({
             <h3 className="md-modal-title">Déplacer le joker vers...</h3>
             <div className="md-color-grid">
               {ALL_COLORS.map((c) => {
-                const card = (player.sets[movingWild.fromColor] ?? []).find(
+                const card = ((player.sets ?? {})[movingWild.fromColor] ?? []).find(
                   (x) => x.id === movingWild.cardId
                 );
                 if (!card || !canMoveWildTo(card, c) || c === movingWild.fromColor) return null;
@@ -606,10 +606,10 @@ export function MonopolyDealGame({
         // Determine available colors
         let availableColors: PropertyColor[] = [];
         if (isWildRent) {
-          availableColors = ALL_COLORS.filter((c) => (myPlayer?.sets[c]?.length ?? 0) > 0);
+          availableColors = ALL_COLORS.filter((c) => ((myPlayer?.sets ?? {})[c]?.length ?? 0) > 0);
         } else if (rentCard.rentColors) {
           availableColors = rentCard.rentColors.filter(
-            (c) => (myPlayer?.sets[c]?.length ?? 0) > 0
+            (c) => ((myPlayer?.sets ?? {})[c]?.length ?? 0) > 0
           );
         }
 
@@ -629,7 +629,7 @@ export function MonopolyDealGame({
               )}
               <div className="md-color-grid">
                 {availableColors.map((c) => {
-                  const count = myPlayer?.sets[c]?.length ?? 0;
+                  const count = (myPlayer?.sets ?? {})[c]?.length ?? 0;
                   const rent = getRent(c, count);
                   return (
                     <button
@@ -787,7 +787,7 @@ export function MonopolyDealGame({
         const targetPlayer = room.players.find((p) => p.id === pendingPlay.targetPlayerId);
         if (!targetPlayer) return null;
         const completeSets = ALL_COLORS.filter((c) => {
-          const s = targetPlayer.sets[c];
+          const s = (targetPlayer.sets ?? {})[c];
           return s && isSetComplete(c, s);
         });
         return (
@@ -829,7 +829,7 @@ export function MonopolyDealGame({
 
       case 'forced_deal_my_card': {
         const myProps = ALL_COLORS.flatMap((color) => {
-          const set = myPlayer?.sets[color] ?? [];
+          const set = (myPlayer?.sets ?? {})[color] ?? [];
           const isComplete = isSetComplete(color, set);
           return set.map((c) => ({ card: c, color, isComplete }));
         }).filter((x) => !x.isComplete);
@@ -920,7 +920,7 @@ export function MonopolyDealGame({
         if (!targetP) return null;
         // Cannot take from complete sets (same rule as Sly Deal)
         const theirProps = ALL_COLORS.flatMap((color) => {
-          const set = targetP.sets[color] ?? [];
+          const set = (targetP.sets ?? {})[color] ?? [];
           if (isSetComplete(color, set)) return [];
           return set.map((c) => ({ card: c, color }));
         });
@@ -1004,7 +1004,7 @@ export function MonopolyDealGame({
         if (!targetP2) return null;
         // Only from incomplete sets
         const incompleteProps = ALL_COLORS.flatMap((color) => {
-          const set = targetP2.sets[color] ?? [];
+          const set = (targetP2.sets ?? {})[color] ?? [];
           if (isSetComplete(color, set)) return [];
           return set.map((c) => ({ card: c, color }));
         });
