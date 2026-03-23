@@ -18,11 +18,11 @@ export { isSupabaseConfigured };
 
 // What the UI needs to show as "next step" when playing a card
 export type PendingPlay =
-  | { step: 'color_picker'; card: MDCard }                                   // wildProperty placement
-  | { step: 'action_choice'; card: MDCard }                                  // action: bank vs play
-  | { step: 'rent_color'; card: MDCard }                                     // choose which color to rent
-  | { step: 'rent_double'; card: MDCard; rentColor: PropertyColor }          // offer to add double rent
-  | { step: 'rent_target'; card: MDCard; rentColor: PropertyColor; doubleCard: MDCard | null }  // wild rent: pick target
+  | { step: 'color_picker'; card: MDCard }
+  | { step: 'action_choice'; card: MDCard }
+  | { step: 'rent_color'; card: MDCard }
+  | { step: 'rent_double'; card: MDCard; rentColor: PropertyColor }
+  | { step: 'rent_target'; card: MDCard; rentColor: PropertyColor; doubleCard: MDCard | null }
   | { step: 'debt_target'; card: MDCard }
   | { step: 'deal_breaker_target'; card: MDCard }
   | { step: 'deal_breaker_set'; card: MDCard; targetId: string }
@@ -31,6 +31,22 @@ export type PendingPlay =
   | { step: 'forced_deal_my'; card: MDCard }
   | { step: 'forced_deal_target'; card: MDCard; myCardId: string; myColor: PropertyColor }
   | { step: 'forced_deal_their'; card: MDCard; myCardId: string; myColor: PropertyColor; targetId: string };
+
+// ─── Pure helpers (outside hook — no closure needed) ──────────────────────────
+
+function normalizeRoom(r: MDRoomRow): MDRoomRow {
+  return {
+    ...r,
+    players: (r.players ?? []).map((p) => ({
+      ...p,
+      bank: p.bank ?? [],
+      sets: p.sets ?? {},
+    })),
+    deck: r.deck ?? [],
+    discard_pile: r.discard_pile ?? [],
+    pending_action: r.pending_action ?? null,
+  };
+}
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +60,7 @@ export function useMonopolyDealGame() {
   const [paymentSelection, setPaymentSelection] = useState<MDCard[]>([]);
   const [isDiscardMode, setIsDiscardMode] = useState(false);
 
+  // Refs hold latest values so async callbacks never read stale closures
   const roomRef = useRef<MDRoomRow | null>(null);
   roomRef.current = room;
   const handRef = useRef<MDCard[]>([]);
@@ -82,7 +99,8 @@ export function useMonopolyDealGame() {
     if (!room || room.turn_drawn || room.pending_action || drawnRef.current) return;
     drawnRef.current = true;
     drawCards();
-  }, [isMyTurn, room?.turn_drawn, room?.pending_action]);
+  }, [isMyTurn, room?.turn_drawn, room?.pending_action]); // eslint-disable-line react-hooks/exhaustive-deps
+  // drawCards uses refs internally — adding it to deps would cause an infinite loop
 
   // ── Confetti on win ────────────────────────────────────────────────────────
 
@@ -92,21 +110,7 @@ export function useMonopolyDealGame() {
     }
   }, [room?.status, room?.winner_id, myPlayerId]);
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-
-  function normalizeRoom(r: MDRoomRow): MDRoomRow {
-    return {
-      ...r,
-      players: (r.players ?? []).map((p) => ({
-        ...p,
-        bank: p.bank ?? [],
-        sets: p.sets ?? {},
-      })),
-      deck: r.deck ?? [],
-      discard_pile: r.discard_pile ?? [],
-      pending_action: r.pending_action ?? null,
-    };
-  }
+  // ─── Internal helpers ──────────────────────────────────────────────────────
 
   function checkWinner(players: MDPlayer[]): string | null {
     for (const p of players) {
@@ -115,23 +119,19 @@ export function useMonopolyDealGame() {
     return null;
   }
 
-  // Update player in list (null-safe)
   function updatePlayer(players: MDPlayer[], id: string, fn: (p: MDPlayer) => MDPlayer): MDPlayer[] {
     return players.map((p) => (p.id === id ? fn(p) : p));
   }
 
-  // Add card to player's bank
   function addToBank(p: MDPlayer, card: MDCard): MDPlayer {
     return { ...p, bank: [...safeBank(p), card] };
   }
 
-  // Add card to player's set
   function addToSet(p: MDPlayer, card: MDCard, color: PropertyColor): MDPlayer {
     const sets = safeSets(p);
     return { ...p, sets: { ...sets, [color]: [...(sets[color] ?? []), card] } };
   }
 
-  // Remove card from player's bank or sets, return [newPlayer, card|null]
   function takeFromBank(p: MDPlayer, cardId: string): [MDPlayer, MDCard | null] {
     const bank = safeBank(p);
     const card = bank.find((c) => c.id === cardId) ?? null;
@@ -176,7 +176,7 @@ export function useMonopolyDealGame() {
     setMyHand(newHand);
   }, [myPlayerId]);
 
-  // ─── Play cards ────────────────────────────────────────────────────────────
+  // ─── canPlay guard (checks current room state) ────────────────────────────
 
   const canPlay = (r: MDRoomRow) =>
     r.status === 'playing' &&
@@ -184,6 +184,8 @@ export function useMonopolyDealGame() {
     r.turn_drawn &&
     r.cards_played_this_turn < 3 &&
     !r.pending_action;
+
+  // ─── Play cards ────────────────────────────────────────────────────────────
 
   const playMoney = useCallback(async (card: MDCard) => {
     const r = roomRef.current;
@@ -200,7 +202,8 @@ export function useMonopolyDealGame() {
       }),
     ]);
     setMyHand(newHand);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // canPlay / helpers use refs or are pure — safe to omit
 
   const playProperty = useCallback(async (card: MDCard, color: PropertyColor) => {
     const r = roomRef.current;
@@ -217,11 +220,7 @@ export function useMonopolyDealGame() {
       }),
     ]);
     setMyHand(newHand);
-  }, [myPlayerId]);
-
-  const playActionAsMoney = useCallback(async (card: MDCard) => {
-    await playMoney(card);
-  }, [playMoney]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Action initiators ─────────────────────────────────────────────────────
 
@@ -249,7 +248,7 @@ export function useMonopolyDealGame() {
       default:
         break;
     }
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Birthday / Debt collector ─────────────────────────────────────────────
 
@@ -281,7 +280,7 @@ export function useMonopolyDealGame() {
     ]);
     setPendingPlay(null);
     setMyHand(newHand);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Rent ──────────────────────────────────────────────────────────────────
 
@@ -323,7 +322,7 @@ export function useMonopolyDealGame() {
     ]);
     setPendingPlay(null);
     setMyHand(newHand);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Deal Breaker ──────────────────────────────────────────────────────────
 
@@ -360,7 +359,7 @@ export function useMonopolyDealGame() {
       }),
     ]);
     setMyHand(newHand);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Sly Deal ──────────────────────────────────────────────────────────────
 
@@ -387,7 +386,7 @@ export function useMonopolyDealGame() {
       }),
     ]);
     setMyHand(newHand);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Forced Deal ───────────────────────────────────────────────────────────
 
@@ -421,7 +420,7 @@ export function useMonopolyDealGame() {
       }),
     ]);
     setMyHand(newHand);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Just Say No ───────────────────────────────────────────────────────────
 
@@ -443,7 +442,6 @@ export function useMonopolyDealGame() {
     setMyHand(newHand);
   }, [myPlayerId]);
 
-  // Accept cancellation (actor sees JSN odd count, accepts)
   const acceptCancellation = useCallback(async () => {
     const r = roomRef.current;
     if (!r?.pending_action) return;
@@ -462,31 +460,25 @@ export function useMonopolyDealGame() {
     const payer = r.players.find((p) => p.id === myPlayerId)!;
     const actor = r.players.find((p) => p.id === pa.actorId)!;
 
-    // Collect selected cards from payer's bank + sets
     const selectedCards: MDCard[] = [];
     let newPayer = { ...payer, bank: safeBank(payer), sets: { ...safeSets(payer) } };
 
     for (const id of cardIds) {
-      // Try bank first
       const [np1, c1] = takeFromBank(newPayer, id);
       if (c1) { newPayer = np1; selectedCards.push(c1); continue; }
-      // Try sets
       for (const color of ALL_COLORS) {
         const [np2, c2] = takeFromSet(newPayer, id, color);
         if (c2) { newPayer = np2; selectedCards.push(c2); break; }
       }
     }
 
-    // Give selected cards to actor's bank
     let newActor = { ...actor, bank: [...safeBank(actor), ...selectedCards], sets: { ...safeSets(actor) } };
 
     let players = updatePlayer(r.players, myPlayerId, () => newPayer);
     players = updatePlayer(players, pa.actorId, () => newActor);
 
     const winner = checkWinner(players);
-    const newPa = restQueue.length > 0
-      ? { ...pa, queue: restQueue, jsnCount: 0 }
-      : null;
+    const newPa = restQueue.length > 0 ? { ...pa, queue: restQueue, jsnCount: 0 } : null;
 
     await updateMDRoom(r.room_code, {
       players,
@@ -495,7 +487,7 @@ export function useMonopolyDealGame() {
       winner_id: winner ?? null,
     });
     setPaymentSelection([]);
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Move wild card ────────────────────────────────────────────────────────
 
@@ -511,7 +503,7 @@ export function useMonopolyDealGame() {
     const updatedMe = addToSet(newMe, card, toColor);
     const players = updatePlayer(r.players, myPlayerId, () => updatedMe);
     await updateMDRoom(r.room_code, { players });
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── End turn ──────────────────────────────────────────────────────────────
 
@@ -521,7 +513,6 @@ export function useMonopolyDealGame() {
     if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
     if (!r.turn_drawn || r.pending_action) return;
 
-    // Must discard to 7
     if (hand.length > 7) {
       setIsDiscardMode(true);
       return;
@@ -565,8 +556,8 @@ export function useMonopolyDealGame() {
 
   const createRoom = useCallback(async (playerName: string) => {
     setLoading(true); setError(null);
-    const room = await createMDRoom(playerName, myPlayerId);
-    if (room) setRoom(normalizeRoom(room));
+    const r = await createMDRoom(playerName, myPlayerId);
+    if (r) setRoom(normalizeRoom(r));
     else setError('Impossible de créer la room.');
     setLoading(false);
   }, [myPlayerId]);
@@ -608,19 +599,17 @@ export function useMonopolyDealGame() {
 
   // ─── Derived state for UI ──────────────────────────────────────────────────
 
-  const isMyTurnToRespond = (() => {
-    if (!room?.pending_action) return false;
+  let isMyTurnToRespond = false;
+  if (room?.pending_action) {
     const pa = room.pending_action;
-    const isEvenJsn = pa.jsnCount % 2 === 0;
-    if (isEvenJsn) {
-      // Target / current payer acts
-      const task = pa.queue[0];
-      return task?.playerId === myPlayerId;
+    if (pa.jsnCount % 2 === 0) {
+      // Even: target / current payer acts
+      isMyTurnToRespond = pa.queue[0]?.playerId === myPlayerId;
     } else {
       // Odd: actor can counter-JSN or accept cancellation
-      return pa.actorId === myPlayerId;
+      isMyTurnToRespond = pa.actorId === myPlayerId;
     }
-  })();
+  }
 
   const hasJSNInHand = myHand.some((c) => c.action === 'just_say_no');
 
@@ -632,7 +621,7 @@ export function useMonopolyDealGame() {
     isDiscardMode,
     // actions
     createRoom, joinRoom, startGame, leaveRoom,
-    drawCards, playMoney, playProperty, playActionAsMoney,
+    drawCards, playMoney, playProperty,
     initiateAction,
     commitDebt, commitRent,
     commitDealBreaker, commitSlyDeal, commitForcedDeal,

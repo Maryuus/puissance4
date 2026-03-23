@@ -4,6 +4,7 @@ import {
   MDCard, MDPlayer, MDPendingAction,
   createMonopolyDealDeck, shuffleDeck,
 } from './monopolyDealLogic';
+import { generateRoomCode } from './utils';
 
 export { isSupabaseConfigured };
 
@@ -35,15 +36,11 @@ export interface MDHandRow {
 
 // ─── Room CRUD ────────────────────────────────────────────────────────────────
 
-function genCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
 
 export async function createMDRoom(playerName: string, playerId: string): Promise<MDRoomRow | null> {
   if (!supabase) return null;
   const player: MDPlayer = { id: playerId, name: playerName, bank: [], sets: {} };
-  let code = genCode();
+  let code = generateRoomCode(6);
   for (let i = 0; i < 10; i++) {
     const { data, error } = await supabase
       .from('monopoly_deal_rooms')
@@ -55,7 +52,7 @@ export async function createMDRoom(playerName: string, playerId: string): Promis
       })
       .select().single();
     if (!error && data) return data as MDRoomRow;
-    if (error?.code === '23505') { code = genCode(); continue; }
+    if (error?.code === '23505') { code = generateRoomCode(6); continue; }
     console.error('createMDRoom:', error);
     return null;
   }
@@ -111,15 +108,22 @@ export async function updateMDRoom(
 
 export async function startMDGame(roomCode: string, roomId: string, players: MDPlayer[]): Promise<boolean> {
   if (!supabase) return false;
-  // Create empty hand rows
-  for (const p of players) {
+  let deck = shuffleDeck(createMonopolyDealDeck());
+  const freshPlayers = players.map((p) => ({ ...p, bank: [], sets: {} }));
+
+  // Deal 5 cards to every player up front
+  const hands: Record<string, MDCard[]> = {};
+  for (const p of freshPlayers) {
+    hands[p.id] = deck.splice(-5);
+  }
+
+  for (const p of freshPlayers) {
     const { error } = await supabase
       .from('monopoly_deal_hands')
-      .upsert({ room_id: roomId, player_id: p.id, cards: [] }, { onConflict: 'room_id,player_id' });
+      .upsert({ room_id: roomId, player_id: p.id, cards: hands[p.id] }, { onConflict: 'room_id,player_id' });
     if (error) return false;
   }
-  const deck = shuffleDeck(createMonopolyDealDeck());
-  const freshPlayers = players.map((p) => ({ ...p, bank: [], sets: {} }));
+
   const { error } = await supabase
     .from('monopoly_deal_rooms')
     .update({

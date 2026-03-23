@@ -1,5 +1,6 @@
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Board, Player, createEmptyBoard } from './gameLogic';
+import { generateRoomCode } from './utils';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -34,14 +35,6 @@ export interface GameRow {
   updated_at: string;
 }
 
-function generateRoomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
 
 export async function createRoom(playerName: string): Promise<GameRow | null> {
   if (!supabase) return null;

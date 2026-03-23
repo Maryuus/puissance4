@@ -131,6 +131,7 @@ export const useGameStore = create<GameState>()(
       roomCode: null,
       myPlayer: null,
       opponentConnected: false,
+      syncedYoutubeUrl: '',
       nextFirstPlayer: 2, // Next game, player 2 goes first (alternating)
       soundEnabled: true,
 
@@ -284,7 +285,6 @@ export const useGameStore = create<GameState>()(
       setRoomCode: (code) => set({ roomCode: code }),
       setMyPlayer: (player) => set({ myPlayer: player }),
       setOpponentConnected: (connected) => set({ opponentConnected: connected }),
-      syncedYoutubeUrl: '',
 
       syncOnlineState: (data) => {
         const state = get();

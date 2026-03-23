@@ -1,3 +1,7 @@
+import { shuffleDeck, createPlayerId } from './utils';
+
+export { shuffleDeck };
+
 export type CardColor = 'red' | 'blue' | 'green' | 'yellow' | 'wild';
 export type CardValue =
   | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
@@ -16,6 +20,7 @@ export interface UnoPlayer {
   unoSafe?: boolean; // true = player has said UNO or has >1 card
 }
 
+// Counter never resets — guarantees unique IDs across multiple deck creations
 let cardCounter = 0;
 
 function makeCard(color: CardColor, value: CardValue): UnoCard {
@@ -23,7 +28,6 @@ function makeCard(color: CardColor, value: CardValue): UnoCard {
 }
 
 export function createDeck(): UnoCard[] {
-  cardCounter = 0;
   const deck: UnoCard[] = [];
   const colors: CardColor[] = ['red', 'blue', 'green', 'yellow'];
 
@@ -47,15 +51,6 @@ export function createDeck(): UnoCard[] {
   return deck;
 }
 
-export function shuffleDeck(deck: UnoCard[]): UnoCard[] {
-  const d = [...deck];
-  for (let i = d.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [d[i], d[j]] = [d[j], d[i]];
-  }
-  return d;
-}
-
 export function canPlay(card: UnoCard, topCard: UnoCard, currentColor: string): boolean {
   if (card.value === 'wild' || card.value === 'wild4') return true;
   if (card.color === currentColor) return true;
@@ -77,13 +72,7 @@ export function getNextPlayerIndex(
 }
 
 export function getOrCreatePlayerId(): string {
-  const key = 'uno_player_id';
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-    sessionStorage.setItem(key, id);
-  }
-  return id;
+  return createPlayerId('uno_player_id');
 }
 
 export const CARD_LABEL: Record<CardValue, string> = {

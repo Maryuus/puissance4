@@ -21,6 +21,22 @@ import {
   isSupabaseConfigured,
 } from '../lib/unoSupabase';
 
+// Module-level constant — does not need to be recreated on every render
+const NUMBER_VALUES = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+
+/**
+ * Reshuffle the discard pile back into the deck when the deck runs out.
+ * Keeps the top discard card in place; shuffles the rest back.
+ */
+function reshuffleDiscard(
+  deck: UnoCard[],
+  discardPile: UnoCard[]
+): { deck: UnoCard[]; discardPile: UnoCard[] } {
+  const top = discardPile[discardPile.length - 1];
+  const toShuffle = discardPile.slice(0, -1);
+  return { deck: [...deck, ...shuffleDeck(toShuffle)], discardPile: [top] };
+}
+
 export function useUnoGame() {
   const [room, setRoom] = useState<UnoRoomRow | null>(null);
   const [myHand, setMyHand] = useState<UnoCard[]>([]);
@@ -30,6 +46,7 @@ export function useUnoGame() {
   const [hasDrawnThisTurn, setHasDrawnThisTurn] = useState(false);
   const [pendingWild, setPendingWild] = useState<UnoCard | null>(null);
 
+  // Refs hold latest values so async callbacks never read stale closures
   const roomRef = useRef<UnoRoomRow | null>(null);
   roomRef.current = room;
 
@@ -133,8 +150,6 @@ export function useUnoGame() {
     setLoading(false);
   }, [myPlayerId]);
 
-  const NUMBER_VALUES = new Set(['0','1','2','3','4','5','6','7','8','9']);
-
   const playCard = useCallback(
     async (card: UnoCard, chosenColor?: string) => {
       const r = roomRef.current;
@@ -165,10 +180,7 @@ export function useUnoGame() {
       const newColor = card.color === 'wild' ? (chosenColor ?? 'red') : card.color;
 
       let newDirection = r.direction;
-      // Default to 0: only draw2/wild4 carry over the existing stack + add their value.
-      // Any other card (including wild) resets the draw stack to 0.
       let newDrawStack = 0;
-      // How many players to skip (beyond the natural "move to next")
       let extraSkips = 0;
 
       for (const c of cardsToPlay) {
@@ -190,13 +202,12 @@ export function useUnoGame() {
         }
       }
 
-      // Move once to next player, then skip extraSkips more
       let nextPlayerIndex = (r.current_player_index + newDirection + r.players.length) % r.players.length;
       for (let i = 0; i < extraSkips; i++) {
         nextPlayerIndex = (nextPlayerIndex + newDirection + r.players.length) % r.players.length;
       }
 
-      // Update unoSafe: going to 1 card resets the flag (must call UNO again)
+      // Going to 1 card resets unoSafe (must call UNO again)
       const updatedPlayers = r.players.map((p) => {
         if (p.id !== myPlayerId) return p;
         const newCount = newHand.length;
@@ -222,6 +233,7 @@ export function useUnoGame() {
       setPendingWild(null);
     },
     [myPlayerId] // eslint-disable-line react-hooks/exhaustive-deps
+    // roomRef / myHandRef / hasDrawnRef are used instead of direct state — safe to omit
   );
 
   const selectWildColor = useCallback(
@@ -242,19 +254,12 @@ export function useUnoGame() {
     let deck = [...r.deck];
     let discardPile = [...r.discard_pile];
 
-    const reshuffleDiscard = (): UnoCard[] => {
-      const top = discardPile[discardPile.length - 1];
-      const toShuffle = discardPile.slice(0, -1);
-      discardPile = [top];
-      return shuffleDeck(toShuffle);
-    };
-
     if (r.draw_stack > 0) {
       // Forced draw
       const drawCount = r.draw_stack;
       const drawn: UnoCard[] = [];
       for (let i = 0; i < drawCount; i++) {
-        if (deck.length === 0) deck = reshuffleDiscard();
+        if (deck.length === 0) ({ deck, discardPile } = reshuffleDiscard(deck, discardPile));
         if (deck.length === 0) break;
         drawn.push(deck.pop()!);
       }
@@ -263,11 +268,7 @@ export function useUnoGame() {
       const updatedPlayers = r.players.map((p) =>
         p.id === myPlayerId ? { ...p, cardCount: newHand.length } : p
       );
-      const nextPlayerIndex = getNextPlayerIndex(
-        r.current_player_index,
-        r.direction,
-        r.players.length
-      );
+      const nextPlayerIndex = getNextPlayerIndex(r.current_player_index, r.direction, r.players.length);
 
       await Promise.all([
         updateUnoHand(r.id, myPlayerId, newHand),
@@ -283,14 +284,10 @@ export function useUnoGame() {
       // Normal draw (1 card)
       if (hasDrawnRef.current) return;
 
-      if (deck.length === 0) deck = reshuffleDiscard();
+      if (deck.length === 0) ({ deck, discardPile } = reshuffleDiscard(deck, discardPile));
       if (deck.length === 0) {
         // No cards left — auto pass
-        const nextPlayerIndex = getNextPlayerIndex(
-          r.current_player_index,
-          r.direction,
-          r.players.length
-        );
+        const nextPlayerIndex = getNextPlayerIndex(r.current_player_index, r.direction, r.players.length);
         await updateUnoRoom(r.room_code, { current_player_index: nextPlayerIndex });
         return;
       }
@@ -303,11 +300,7 @@ export function useUnoGame() {
 
       await Promise.all([
         updateUnoHand(r.id, myPlayerId, newHand),
-        updateUnoRoom(r.room_code, {
-          deck,
-          discard_pile: discardPile,
-          players: updatedPlayers,
-        }),
+        updateUnoRoom(r.room_code, { deck, discard_pile: discardPile, players: updatedPlayers }),
       ]);
 
       setHasDrawnThisTurn(true);
@@ -315,27 +308,20 @@ export function useUnoGame() {
       // If drawn card is not playable → auto pass
       const top = discardPile[discardPile.length - 1];
       if (!canPlay(drawn, top, r.current_color)) {
-        const nextPlayerIndex = getNextPlayerIndex(
-          r.current_player_index,
-          r.direction,
-          r.players.length
-        );
+        const nextPlayerIndex = getNextPlayerIndex(r.current_player_index, r.direction, r.players.length);
         await updateUnoRoom(r.room_code, { current_player_index: nextPlayerIndex });
         setHasDrawnThisTurn(false);
       }
     }
-  }, [myPlayerId]);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // roomRef / myHandRef / hasDrawnRef are used instead of direct state — safe to omit
 
   const passTurn = useCallback(async () => {
     const r = roomRef.current;
     if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
     if (!hasDrawnRef.current) return;
 
-    const nextPlayerIndex = getNextPlayerIndex(
-      r.current_player_index,
-      r.direction,
-      r.players.length
-    );
+    const nextPlayerIndex = getNextPlayerIndex(r.current_player_index, r.direction, r.players.length);
     await updateUnoRoom(r.room_code, { current_player_index: nextPlayerIndex });
     setHasDrawnThisTurn(false);
   }, [myPlayerId]);
@@ -362,16 +348,9 @@ export function useUnoGame() {
     let deck = [...r.deck];
     let discardPile = [...r.discard_pile];
 
-    const reshuffleDiscard = (): UnoCard[] => {
-      const top = discardPile[discardPile.length - 1];
-      const toShuffle = discardPile.slice(0, -1);
-      discardPile = [top];
-      return shuffleDeck(toShuffle);
-    };
-
     const penalty: UnoCard[] = [];
     for (let i = 0; i < 2; i++) {
-      if (deck.length === 0) deck = reshuffleDiscard();
+      if (deck.length === 0) ({ deck, discardPile } = reshuffleDiscard(deck, discardPile));
       if (deck.length > 0) penalty.push(deck.pop()!);
     }
 
@@ -387,6 +366,7 @@ export function useUnoGame() {
       updateUnoRoom(r.room_code, { deck, discard_pile: discardPile, players: updatedPlayers }),
     ]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // roomRef is used instead of room — safe to omit
 
   const syncYoutubeUrl = useCallback(async (url: string) => {
     const r = roomRef.current;

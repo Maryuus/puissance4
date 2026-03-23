@@ -1,6 +1,7 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from './supabase';
 import { UnoCard, UnoPlayer, createDeck, shuffleDeck } from './unoLogic';
+import { generateRoomCode } from './utils';
 
 export { isSupabaseConfigured };
 
@@ -29,12 +30,6 @@ export interface UnoHandRow {
   cards: UnoCard[];
 }
 
-function generateRoomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
 
 export async function createUnoRoom(
   playerName: string,

@@ -1,3 +1,7 @@
+import { shuffleDeck, createPlayerId } from './utils';
+
+export { shuffleDeck };
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type PropertyColor =
@@ -87,6 +91,24 @@ export const RENT: Record<PropertyColor, number[]> = {
   utility:   [0, 1, 2],
 };
 
+/** Rules data for the in-game / hub rules modal */
+export const MD_RULES: { title: string; body: string }[] = [
+  { title: 'But du jeu', body: 'Être le premier à former 3 sets complets de propriétés.' },
+  { title: 'Tour de jeu', body: "Piochez 2 cartes (5 si votre main est vide). Jouez jusqu'à 3 cartes. Défaussez si vous avez plus de 7 cartes en main." },
+  { title: 'Jouer une carte', body: "Propriété → dans vos sets. Argent → dans votre banque. Carte action → effet immédiat. N'importe quelle carte → banque pour sa valeur en $." },
+  { title: 'Loyer', body: 'Collectez un loyer auprès des autres joueurs selon le nombre de propriétés dans la couleur choisie.' },
+  { title: 'Double Loyer', body: 'Jouez avec un loyer pour doubler le montant (compte comme 1 carte jouée supplémentaire).' },
+  { title: 'Loyer Universel', body: 'Choisissez une couleur ET un joueur ciblé.' },
+  { title: 'Percepteur', body: "Collectez $5M auprès d'un joueur de votre choix." },
+  { title: 'Anniversaire', body: 'Collectez $2M auprès de TOUS les autres joueurs.' },
+  { title: 'Saisie', body: "Volez 1 propriété dans un set INCOMPLET d'un adversaire." },
+  { title: 'Échange Forcé', body: "Échangez une de vos propriétés (set incomplet) contre une propriété d'un adversaire (set incomplet)." },
+  { title: 'Coup de Maître', body: "Volez un set COMPLET entier d'un adversaire." },
+  { title: 'Non Merci !', body: "Annule n'importe quelle action jouée contre vous. Peut être contré avec un autre Non Merci ! (chaîne)." },
+  { title: 'Paiement', body: "Payez depuis votre banque et/ou vos sets de propriétés. Si vous ne pouvez pas tout payer, donnez tout ce que vous avez." },
+  { title: 'Jokers de propriété', body: "Peuvent être placés dans l'une de leurs couleurs valides. Déplaçables librement entre ces couleurs pendant votre tour (action gratuite)." },
+];
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 export function safeBank(p: MDPlayer): MDCard[] {
@@ -124,24 +146,18 @@ export function getValidWildColors(card: MDCard): PropertyColor[] {
 }
 
 export function getOrCreatePlayerId(): string {
-  const key = 'md_player_id';
-  let id = sessionStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    sessionStorage.setItem(key, id);
-  }
-  return id;
+  return createPlayerId('md_player_id');
 }
 
 // ─── Deck ─────────────────────────────────────────────────────────────────────
 
+// Counter never resets — guarantees unique IDs across multiple deck creations
 let _nextId = 1;
 function mk(partial: Omit<MDCard, 'id'>): MDCard {
   return { id: `md-${_nextId++}`, ...partial };
 }
 
 export function createMonopolyDealDeck(): MDCard[] {
-  _nextId = 1;
   const cards: MDCard[] = [];
 
   // Money
@@ -154,42 +170,42 @@ export function createMonopolyDealDeck(): MDCard[] {
     }
   }
 
-  // Properties
-  const props: [PropertyColor, string, number, number][] = [
-    ['brown',     'Mediterranean Avenue', 1, 1],
-    ['brown',     'Baltic Avenue',        1, 1],
-    ['lightBlue', 'Connecticut Avenue',   1, 1],
-    ['lightBlue', 'Oriental Avenue',      1, 1],
-    ['lightBlue', 'Vermont Avenue',       1, 1],
-    ['pink',      'St. Charles Place',    2, 2],
-    ['pink',      'States Avenue',        2, 2],
-    ['pink',      'Virginia Avenue',      2, 2],
-    ['orange',    'St. James Place',      2, 2],
-    ['orange',    'Tennessee Avenue',     2, 2],
-    ['orange',    'New York Avenue',      2, 2],
-    ['red',       'Indiana Avenue',       3, 3],
-    ['red',       'Illinois Avenue',      3, 3],
-    ['red',       'Kentucky Avenue',      3, 3],
-    ['yellow',    'Atlantic Avenue',      3, 3],
-    ['yellow',    'Ventnor Avenue',       3, 3],
-    ['yellow',    'Marvin Gardens',       3, 3],
-    ['green',     'Pacific Avenue',       4, 4],
-    ['green',     'North Carolina Ave',   4, 4],
-    ['green',     'Pennsylvania Ave',     4, 4],
-    ['blue',      'Boardwalk',            4, 4],
-    ['blue',      'Park Place',           4, 4],
-    ['railroad',  'Reading Railroad',     2, 2],
-    ['railroad',  'Pennsylvania Railroad',2, 2],
-    ['railroad',  'B&O Railroad',         2, 2],
-    ['railroad',  'Short Line Railroad',  2, 2],
-    ['utility',   'Electric Company',     2, 2],
-    ['utility',   'Water Works',          2, 2],
+  // Properties: [color, name, value]
+  const props: [PropertyColor, string, number][] = [
+    ['brown',     'Mediterranean Avenue', 1],
+    ['brown',     'Baltic Avenue',        1],
+    ['lightBlue', 'Connecticut Avenue',   1],
+    ['lightBlue', 'Oriental Avenue',      1],
+    ['lightBlue', 'Vermont Avenue',       1],
+    ['pink',      'St. Charles Place',    2],
+    ['pink',      'States Avenue',        2],
+    ['pink',      'Virginia Avenue',      2],
+    ['orange',    'St. James Place',      2],
+    ['orange',    'Tennessee Avenue',     2],
+    ['orange',    'New York Avenue',      2],
+    ['red',       'Indiana Avenue',       3],
+    ['red',       'Illinois Avenue',      3],
+    ['red',       'Kentucky Avenue',      3],
+    ['yellow',    'Atlantic Avenue',      3],
+    ['yellow',    'Ventnor Avenue',       3],
+    ['yellow',    'Marvin Gardens',       3],
+    ['green',     'Pacific Avenue',       4],
+    ['green',     'North Carolina Ave',   4],
+    ['green',     'Pennsylvania Ave',     4],
+    ['blue',      'Boardwalk',            4],
+    ['blue',      'Park Place',           4],
+    ['railroad',  'Reading Railroad',     2],
+    ['railroad',  'Pennsylvania Railroad',2],
+    ['railroad',  'B&O Railroad',         2],
+    ['railroad',  'Short Line Railroad',  2],
+    ['utility',   'Electric Company',     2],
+    ['utility',   'Water Works',          2],
   ];
   for (const [color, name, value] of props) {
     cards.push(mk({ type: 'property', name, value, color }));
   }
 
-  // Wild properties
+  // Wild properties: [wildColors, value, count]
   const wilds: [PropertyColor[], number, number][] = [
     [['railroad', 'utility'], 0, 2],
     [['brown', 'lightBlue'],  1, 1],
@@ -197,20 +213,15 @@ export function createMonopolyDealDeck(): MDCard[] {
     [['red', 'yellow'],       3, 2],
     [['green', 'blue'],       4, 1],
     [['green', 'railroad'],   4, 1],
-    [['lightBlue', 'railroad', 'utility'], 4, 1], // rainbow-ish
+    [['lightBlue', 'railroad', 'utility'], 4, 1],
   ];
   for (const [wildColors, value, count] of wilds) {
     for (let i = 0; i < count; i++) {
-      cards.push(mk({
-        type: 'wildProperty',
-        name: 'Joker propriété',
-        value,
-        wildColors,
-      }));
+      cards.push(mk({ type: 'wildProperty', name: 'Joker propriété', value, wildColors }));
     }
   }
 
-  // Actions
+  // Actions: [action, name, value, count, rentColors?]
   const actions: [ActionType, string, number, number, PropertyColor[]?][] = [
     ['just_say_no',   'Non Merci !',       4, 3],
     ['birthday',      'Anniversaire',      2, 3],
@@ -233,13 +244,4 @@ export function createMonopolyDealDeck(): MDCard[] {
   }
 
   return cards;
-}
-
-export function shuffleDeck(deck: MDCard[]): MDCard[] {
-  const d = [...deck];
-  for (let i = d.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [d[i], d[j]] = [d[j], d[i]];
-  }
-  return d;
 }

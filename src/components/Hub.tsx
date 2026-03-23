@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
+import { MD_RULES } from '../lib/monopolyDealLogic';
 
 interface HubProps {
   onSelectGame: (game: 'puissance4' | 'uno' | 'monopolydeal') => void;
@@ -38,22 +39,6 @@ const games = [
 
 const comingSoon: { name: string; description: string; emoji: string; accent: string }[] = [];
 
-const MD_RULES = [
-  { title: 'But du jeu', body: 'Être le premier à former 3 sets complets de propriétés.' },
-  { title: 'Tour de jeu', body: 'Piochez 2 cartes (5 si votre main est vide). Jouez jusqu\'à 3 cartes. Défaussez si vous avez plus de 7 cartes en main.' },
-  { title: 'Jouer une carte', body: 'Propriété → dans vos sets. Argent → dans votre banque. Carte action → effet immédiat. N\'importe quelle carte → banque pour sa valeur en $.' },
-  { title: 'Loyer', body: 'Collectez un loyer auprès des autres joueurs selon le nombre de propriétés dans la couleur choisie.' },
-  { title: 'Double Loyer', body: 'Jouez avec un loyer pour doubler le montant (compte comme 1 carte jouée supplémentaire).' },
-  { title: 'Loyer Universel', body: 'Choisissez une couleur ET un joueur ciblé.' },
-  { title: 'Percepteur', body: 'Collectez $5M auprès d\'un joueur de votre choix.' },
-  { title: 'Anniversaire', body: 'Collectez $2M auprès de TOUS les autres joueurs.' },
-  { title: 'Saisie', body: 'Volez 1 propriété dans un set INCOMPLET d\'un adversaire.' },
-  { title: 'Échange Forcé', body: 'Échangez une de vos propriétés (set incomplet) contre une propriété d\'un adversaire (set incomplet).' },
-  { title: 'Coup de Maître', body: 'Volez un set COMPLET entier d\'un adversaire.' },
-  { title: 'Non Merci !', body: 'Annule n\'importe quelle action jouée contre vous. Peut être contré avec un autre Non Merci ! (chaîne).' },
-  { title: 'Paiement', body: 'Payez depuis votre banque et/ou vos sets de propriétés. Si vous ne pouvez pas tout payer, donnez tout ce que vous avez.' },
-  { title: 'Jokers de propriété', body: 'Peuvent être placés dans l\'une de leurs couleurs valides. Déplaçables librement entre ces couleurs pendant votre tour (action gratuite).' },
-];
 
 export function Hub({ onSelectGame }: HubProps) {
   const [showMDRules, setShowMDRules] = useState(false);
