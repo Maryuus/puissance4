@@ -153,9 +153,15 @@ export function useMonopolyDealGame() {
 
   const drawCards = useCallback(async () => {
     const r = roomRef.current;
-    const hand = handRef.current;
     if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
     if (r.turn_drawn) return;
+
+    // Fetch hand fresh from DB to avoid race condition: the room "playing" update
+    // can arrive before the hand realtime event, leaving handRef.current empty and
+    // causing count=5 (empty-hand rule) instead of count=2.
+    const freshCards = await getMDHand(r.id, myPlayerId);
+    const hand = freshCards ?? handRef.current;
+    if (freshCards) setMyHand(freshCards);
 
     const count = hand.length === 0 ? 5 : 2;
     let deck = [...r.deck];
