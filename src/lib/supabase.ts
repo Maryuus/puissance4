@@ -143,31 +143,33 @@ export async function updateGame(
   return data as GameRow;
 }
 
+export interface OnlineMoveOptions {
+  board: Board;
+  currentPlayer: Player;
+  status: 'playing' | 'won' | 'draw';
+  winner: Player | null;
+  winningCells: [number, number][] | null;
+  player1Score: number;
+  player2Score: number;
+  draws: number;
+  nextFirstPlayer: number;
+}
+
 export async function makeOnlineMove(
   roomCode: string,
-  board: Board,
-  currentPlayer: Player,
-  status: 'playing' | 'won' | 'draw',
-  winner: Player | null,
-  winningCells: [number, number][] | null,
-  player1Score: number,
-  player2Score: number,
-  draws: number,
-  nextFirstPlayer: number
+  opts: OnlineMoveOptions,
 ): Promise<GameRow | null> {
-  const updates: Partial<GameRow> = {
-    board,
-    current_player: currentPlayer,
-    status,
-    winner,
-    winning_cells: winningCells,
-    player1_score: player1Score,
-    player2_score: player2Score,
-    draws,
-    next_first_player: nextFirstPlayer,
-  };
-
-  return updateGame(roomCode, updates);
+  return updateGame(roomCode, {
+    board: opts.board,
+    current_player: opts.currentPlayer,
+    status: opts.status,
+    winner: opts.winner,
+    winning_cells: opts.winningCells,
+    player1_score: opts.player1Score,
+    player2_score: opts.player2Score,
+    draws: opts.draws,
+    next_first_player: opts.nextFirstPlayer,
+  });
 }
 
 export async function resetOnlineGame(
@@ -191,44 +193,25 @@ export async function resetOnlineGame(
   });
 }
 
-let activeChannel: RealtimeChannel | null = null;
-
 export function subscribeToRoom(
   roomCode: string,
   onUpdate: (game: GameRow) => void
 ): () => void {
   if (!supabase) return () => {};
 
-  // Clean up existing subscription
-  if (activeChannel) {
-    supabase.removeChannel(activeChannel);
-    activeChannel = null;
-  }
-
-  const channel = supabase
+  let channel: RealtimeChannel | null = supabase
     .channel(`game:${roomCode}`)
     .on(
       'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'games',
-        filter: `room_code=eq.${roomCode}`,
-      },
-      (payload) => {
-        if (payload.new) {
-          onUpdate(payload.new as GameRow);
-        }
-      }
+      { event: '*', schema: 'public', table: 'games', filter: `room_code=eq.${roomCode}` },
+      (payload) => { if (payload.new) onUpdate(payload.new as GameRow); }
     )
     .subscribe();
 
-  activeChannel = channel;
-
   return () => {
-    if (supabase && activeChannel) {
-      supabase.removeChannel(activeChannel);
-      activeChannel = null;
+    if (supabase && channel) {
+      supabase.removeChannel(channel);
+      channel = null;
     }
   };
 }

@@ -27,11 +27,13 @@ const NUMBER_VALUES = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 /**
  * Reshuffle the discard pile back into the deck when the deck runs out.
  * Keeps the top discard card in place; shuffles the rest back.
+ * Returns unchanged if there is nothing to reshuffle (0 or 1 card in discard).
  */
 function reshuffleDiscard(
   deck: UnoCard[],
   discardPile: UnoCard[]
 ): { deck: UnoCard[]; discardPile: UnoCard[] } {
+  if (discardPile.length <= 1) return { deck, discardPile };
   const top = discardPile[discardPile.length - 1];
   const toShuffle = discardPile.slice(0, -1);
   return { deck: [...deck, ...shuffleDeck(toShuffle)], discardPile: [top] };
@@ -63,7 +65,10 @@ export function useUnoGame() {
     const roomCode = room.room_code;
     const roomId = room.id;
 
-    const unsubRoom = subscribeToUnoRoom(roomCode, setRoom);
+    // Merge with previous state — guards against partial Supabase Realtime payloads
+    const unsubRoom = subscribeToUnoRoom(roomCode, (updated) => {
+      setRoom(prev => prev ? { ...prev, ...updated } as UnoRoomRow : updated);
+    });
     const unsubHand = subscribeToUnoHand(roomId, myPlayerId, setMyHand);
 
     return () => {
@@ -211,7 +216,7 @@ export function useUnoGame() {
       const updatedPlayers = r.players.map((p) => {
         if (p.id !== myPlayerId) return p;
         const newCount = newHand.length;
-        return { ...p, cardCount: newCount, unoSafe: newCount === 1 ? false : true };
+        return { ...p, cardCount: newCount, unoSafe: newCount !== 1 };
       });
 
       const isWinner = newHand.length === 0;
@@ -251,8 +256,8 @@ export function useUnoGame() {
     const hand = myHandRef.current;
     if (!r || r.players[r.current_player_index]?.id !== myPlayerId) return;
 
-    let deck = [...r.deck];
-    let discardPile = [...r.discard_pile];
+    let deck = [...(r.deck ?? [])];
+    let discardPile = [...(r.discard_pile ?? [])];
 
     if (r.draw_stack > 0) {
       // Forced draw

@@ -5,9 +5,22 @@ import { App as P4App } from './components/App';
 import { UnoApp } from './components/uno/UnoApp';
 import { MonopolyDealApp } from './components/monopolydeal/MonopolyDealApp';
 
-type CurrentGame = 'hub' | 'puissance4' | 'uno' | 'monopolydeal';
+// ─── Game registry ────────────────────────────────────────────────────────────
+// To add a new game:
+//   1. Import the App component
+//   2. Add an entry here
+//   3. Add the game card in Hub.tsx
 
-/** Fade-in/out wrapper used for every game transition */
+export type GameId = 'puissance4' | 'uno' | 'monopolydeal';
+
+const GAME_COMPONENTS: Record<GameId, React.ComponentType<{ onGoBack: () => void }>> = {
+  puissance4: P4App,
+  uno: UnoApp,
+  monopolydeal: MonopolyDealApp,
+};
+
+// ─── Transition wrapper ───────────────────────────────────────────────────────
+
 function GameTransition({ gameKey, children }: { gameKey: string; children: React.ReactNode }) {
   return (
     <motion.div
@@ -23,39 +36,31 @@ function GameTransition({ gameKey, children }: { gameKey: string; children: Reac
   );
 }
 
+// ─── Shell ────────────────────────────────────────────────────────────────────
+
 export function AppShell() {
-  const [currentGame, setCurrentGame] = useState<CurrentGame>('hub');
+  const [currentGame, setCurrentGame] = useState<GameId | 'hub'>('hub');
 
   const goBack = () => setCurrentGame('hub');
 
   return (
     <AnimatePresence mode="wait">
-      {currentGame === 'hub' && (
+      {currentGame === 'hub' ? (
         <GameTransition gameKey="hub">
           <div className="app-root">
             <div className="screen-wrapper">
-              <Hub onSelectGame={(game) => setCurrentGame(game)} />
+              <Hub onSelectGame={setCurrentGame} />
             </div>
           </div>
         </GameTransition>
-      )}
-
-      {currentGame === 'puissance4' && (
-        <GameTransition gameKey="puissance4">
-          <P4App onGoBack={goBack} />
-        </GameTransition>
-      )}
-
-      {currentGame === 'uno' && (
-        <GameTransition gameKey="uno">
-          <UnoApp onGoBack={goBack} />
-        </GameTransition>
-      )}
-
-      {currentGame === 'monopolydeal' && (
-        <GameTransition gameKey="monopolydeal">
-          <MonopolyDealApp onGoBack={goBack} />
-        </GameTransition>
+      ) : (
+        Object.entries(GAME_COMPONENTS).map(([id, GameComponent]) =>
+          currentGame === id ? (
+            <GameTransition key={id} gameKey={id}>
+              <GameComponent onGoBack={goBack} />
+            </GameTransition>
+          ) : null
+        )
       )}
     </AnimatePresence>
   );

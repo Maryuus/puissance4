@@ -117,12 +117,15 @@ export async function startMDGame(roomCode: string, roomId: string, players: MDP
     hands[p.id] = deck.splice(-5);
   }
 
-  for (const p of freshPlayers) {
-    const { error } = await supabase
-      .from('monopoly_deal_hands')
-      .upsert({ room_id: roomId, player_id: p.id, cards: hands[p.id] }, { onConflict: 'room_id,player_id' });
-    if (error) return false;
-  }
+  const sb = supabase;
+  const handResults = await Promise.all(
+    freshPlayers.map(p =>
+      sb
+        .from('monopoly_deal_hands')
+        .upsert({ room_id: roomId, player_id: p.id, cards: hands[p.id] }, { onConflict: 'room_id,player_id' })
+    )
+  );
+  if (handResults.some(r => r.error)) return false;
 
   const { error } = await supabase
     .from('monopoly_deal_rooms')
@@ -162,26 +165,21 @@ export async function updateMDHand(roomId: string, playerId: string, cards: MDCa
 
 // ─── Realtime ─────────────────────────────────────────────────────────────────
 
-let roomChannel: RealtimeChannel | null = null;
-let handChannel: RealtimeChannel | null = null;
-
 export function subscribeToMDRoom(roomCode: string, onUpdate: (r: MDRoomRow) => void): () => void {
   if (!supabase) return () => {};
-  if (roomChannel) { supabase.removeChannel(roomChannel); roomChannel = null; }
-  roomChannel = supabase
+  let channel: RealtimeChannel | null = supabase
     .channel(`md_room:${roomCode}`)
     .on('postgres_changes', {
       event: '*', schema: 'public', table: 'monopoly_deal_rooms',
       filter: `room_code=eq.${roomCode}`,
     }, (payload) => { if (payload.new) onUpdate(payload.new as MDRoomRow); })
     .subscribe();
-  return () => { if (supabase && roomChannel) { supabase.removeChannel(roomChannel); roomChannel = null; } };
+  return () => { if (supabase && channel) { supabase.removeChannel(channel); channel = null; } };
 }
 
 export function subscribeToMDHand(roomId: string, playerId: string, onUpdate: (cards: MDCard[]) => void): () => void {
   if (!supabase) return () => {};
-  if (handChannel) { supabase.removeChannel(handChannel); handChannel = null; }
-  handChannel = supabase
+  let channel: RealtimeChannel | null = supabase
     .channel(`md_hand:${roomId}:${playerId}`)
     .on('postgres_changes', {
       event: '*', schema: 'public', table: 'monopoly_deal_hands',
@@ -191,5 +189,5 @@ export function subscribeToMDHand(roomId: string, playerId: string, onUpdate: (c
       if (row?.player_id === playerId) onUpdate(row.cards ?? []);
     })
     .subscribe();
-  return () => { if (supabase && handChannel) { supabase.removeChannel(handChannel); handChannel = null; } };
+  return () => { if (supabase && channel) { supabase.removeChannel(channel); channel = null; } };
 }

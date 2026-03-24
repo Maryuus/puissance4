@@ -141,18 +141,21 @@ export async function startUnoGame(
   const startCard = remaining[startIdx];
   remaining = [...remaining.slice(0, startIdx), ...remaining.slice(startIdx + 1)];
 
-  // Upsert hands for all players
-  for (const player of players) {
-    const { error } = await supabase
-      .from('uno_hands')
-      .upsert(
-        { room_id: roomId, player_id: player.id, cards: hands[player.id] },
-        { onConflict: 'room_id,player_id' }
-      );
-    if (error) {
-      console.error('Error setting hand:', error);
-      return false;
-    }
+  // Upsert all hands in parallel
+  const sb = supabase;
+  const handResults = await Promise.all(
+    players.map(player =>
+      sb
+        .from('uno_hands')
+        .upsert(
+          { room_id: roomId, player_id: player.id, cards: hands[player.id] },
+          { onConflict: 'room_id,player_id' }
+        )
+    )
+  );
+  if (handResults.some(r => r.error)) {
+    console.error('Error setting hands:', handResults.find(r => r.error)?.error);
+    return false;
   }
 
   const updatedPlayers = players.map((p) => ({ ...p, cardCount: 7 }));
@@ -236,21 +239,13 @@ export async function updateUnoHand(
   return !error;
 }
 
-let activeRoomChannel: RealtimeChannel | null = null;
-let activeHandChannel: RealtimeChannel | null = null;
-
 export function subscribeToUnoRoom(
   roomCode: string,
   onUpdate: (room: UnoRoomRow) => void
 ): () => void {
   if (!supabase) return () => {};
 
-  if (activeRoomChannel) {
-    supabase.removeChannel(activeRoomChannel);
-    activeRoomChannel = null;
-  }
-
-  const channel = supabase
+  let channel: RealtimeChannel | null = supabase
     .channel(`uno_room:${roomCode}`)
     .on(
       'postgres_changes',
@@ -259,12 +254,10 @@ export function subscribeToUnoRoom(
     )
     .subscribe();
 
-  activeRoomChannel = channel;
-
   return () => {
-    if (supabase && activeRoomChannel) {
-      supabase.removeChannel(activeRoomChannel);
-      activeRoomChannel = null;
+    if (supabase && channel) {
+      supabase.removeChannel(channel);
+      channel = null;
     }
   };
 }
@@ -276,12 +269,7 @@ export function subscribeToUnoHand(
 ): () => void {
   if (!supabase) return () => {};
 
-  if (activeHandChannel) {
-    supabase.removeChannel(activeHandChannel);
-    activeHandChannel = null;
-  }
-
-  const channel = supabase
+  let channel: RealtimeChannel | null = supabase
     .channel(`uno_hand:${roomId}:${playerId}`)
     .on(
       'postgres_changes',
@@ -293,12 +281,10 @@ export function subscribeToUnoHand(
     )
     .subscribe();
 
-  activeHandChannel = channel;
-
   return () => {
-    if (supabase && activeHandChannel) {
-      supabase.removeChannel(activeHandChannel);
-      activeHandChannel = null;
+    if (supabase && channel) {
+      supabase.removeChannel(channel);
+      channel = null;
     }
   };
 }

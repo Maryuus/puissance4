@@ -72,7 +72,9 @@ export function useMonopolyDealGame() {
   useEffect(() => {
     if (!room?.room_code || !room?.id) return;
     const unsub1 = subscribeToMDRoom(room.room_code, (updated) => {
-      setRoom(normalizeRoom(updated));
+      // Merge with previous state — guards against partial Supabase Realtime payloads
+      // (when REPLICA IDENTITY is not FULL, only changed columns arrive in payload.new)
+      setRoom(prev => normalizeRoom(prev ? { ...prev, ...updated } as MDRoomRow : updated));
     });
     const unsub2 = subscribeToMDHand(room.id, myPlayerId, (cards) => {
       setMyHand(cards ?? []);

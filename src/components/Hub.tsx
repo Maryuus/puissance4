@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ThemeToggle } from './ThemeToggle';
 import { MD_RULES } from '../lib/monopolyDealLogic';
+import type { GameId } from '../AppShell';
 
 interface HubProps {
-  onSelectGame: (game: 'puissance4' | 'uno' | 'monopolydeal') => void;
+  onSelectGame: (game: GameId) => void;
 }
 
-const games = [
+// To add a new game to the hub, add an entry here and register it in AppShell.tsx
+const games: { id: GameId; name: string; description: string; emoji: string; accent: string; accentMuted: string; available: boolean }[] = [
   {
-    id: 'puissance4' as const,
+    id: 'puissance4',
     name: 'Puissance 4',
     description: 'Aligne 4 jetons — local, IA, ou en ligne',
     emoji: '🔴',
@@ -18,7 +20,7 @@ const games = [
     available: true,
   },
   {
-    id: 'uno' as const,
+    id: 'uno',
     name: 'UNO',
     description: 'Jeu de cartes multijoueur en ligne · 2–10 joueurs',
     emoji: '🃏',
@@ -27,7 +29,7 @@ const games = [
     available: true,
   },
   {
-    id: 'monopolydeal' as const,
+    id: 'monopolydeal',
     name: 'Monopoly Deal',
     description: 'Le jeu de cartes Monopoly · 2–5 joueurs',
     emoji: '🎩',
@@ -35,7 +37,7 @@ const games = [
     accentMuted: 'rgba(34,197,94,0.15)',
     available: true,
   },
-] as const;
+];
 
 const comingSoon: { name: string; description: string; emoji: string; accent: string }[] = [];
 

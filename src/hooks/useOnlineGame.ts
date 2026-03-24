@@ -8,6 +8,7 @@ import {
   getRoom,
   GameRow,
   isSupabaseConfigured,
+  OnlineMoveOptions,
 } from '../lib/supabase';
 import { checkWin, checkDraw, dropPiece, getOtherPlayer } from '../lib/gameLogic';
 import { Player } from '../lib/gameLogic';
@@ -123,18 +124,18 @@ export function useOnlineGame() {
 
     const nextPlayer = winResult.won || isDraw ? currentPlayer : getOtherPlayer(currentPlayer);
 
-    await makeOnlineMove(
-      roomCode,
-      newBoard,
-      nextPlayer,
-      newStatus,
+    const opts: OnlineMoveOptions = {
+      board: newBoard,
+      currentPlayer: nextPlayer,
+      status: newStatus,
       winner,
       winningCells,
-      newP1Score,
-      newP2Score,
-      newDraws,
-      newNextFirst
-    );
+      player1Score: newP1Score,
+      player2Score: newP2Score,
+      draws: newDraws,
+      nextFirstPlayer: newNextFirst,
+    };
+    await makeOnlineMove(roomCode, opts);
   }, []);
 
   const handleOnlineRematch = useCallback(async () => {
