@@ -436,7 +436,7 @@ export function useMonopolyDealGame() {
         delete sets[pa.targetColor!];
         return { ...p, sets };
       });
-      players = updatePlayer(players, myPlayerId, (p) => {
+      players = updatePlayer(players, pa.actorId, (p) => {
         const sets = safeSets(p);
         const existing = sets[pa.targetColor!] ?? [];
         return { ...p, sets: { ...sets, [pa.targetColor!]: [...existing, ...stolenSet] } };
@@ -453,7 +453,7 @@ export function useMonopolyDealGame() {
       const [newTarget, stolen] = takeFromSet(target, pa.targetCardId, pa.targetColor);
       if (!stolen) return;
       let players = updatePlayer(r.players, pa.targetId, () => newTarget);
-      players = updatePlayer(players, myPlayerId, (p) => addToSet(p, stolen, pa.targetColor!));
+      players = updatePlayer(players, pa.actorId, (p) => addToSet(p, stolen, pa.targetColor!));
       const winner = checkWinner(players);
       await updateMDRoom(r.room_code, {
         players, pending_action: null,

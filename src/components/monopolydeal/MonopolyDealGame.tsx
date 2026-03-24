@@ -974,8 +974,8 @@ function PendingPlayOverlay({
               key={color}
               style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer', background: COLOR_BG[color], color: 'white', fontWeight: 700, fontSize: 13, border: 'none' }}
               onClick={() => {
-              if (!doubleRentCard) {
-                // No double rent card — skip straight to target/commit
+              // Skip double rent if no double_rent card in hand OR no card play remaining
+              if (!doubleRentCard || room.cards_played_this_turn >= 2) {
                 if (card.action === 'wild_rent') {
                   setPendingPlay({ step: 'rent_target', card, rentColor: color, doubleCard: null });
                 } else {
