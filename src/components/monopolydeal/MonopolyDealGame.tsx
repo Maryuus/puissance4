@@ -34,6 +34,7 @@ interface Props {
   onCommitDealBreaker: (card: MDCard, targetId: string, color: PropertyColor) => void;
   onCommitSlyDeal: (card: MDCard, targetId: string, cardId: string, color: PropertyColor) => void;
   onCommitForcedDeal: (card: MDCard, myCardId: string, myColor: PropertyColor, targetId: string, theirCardId: string, theirColor: PropertyColor) => void;
+  onConfirmSteal: () => void;
   onRespondJSN: (jsnCardId: string) => void;
   onAcceptCancellation: () => void;
   onSubmitPayment: (cardIds: string[]) => void;
@@ -41,6 +42,7 @@ interface Props {
   onEndTurn: () => void;
   onDiscardCard: (card: MDCard) => void;
   onSyncYoutubeUrl: (url: string) => void;
+  onPlayAgain: () => void;
   onLeave: () => void;
 }
 
@@ -332,8 +334,9 @@ export function MonopolyDealGame({
   isDiscardMode,
   onPlayMoney, onPlayProperty, onPlayActionAsMoney, onInitiateAction, onCommitPassGo,
   onCommitDebt, onCommitRent, onCommitDealBreaker, onCommitSlyDeal, onCommitForcedDeal,
+  onConfirmSteal,
   onRespondJSN, onAcceptCancellation, onSubmitPayment, onMoveWild,
-  onEndTurn, onDiscardCard, onSyncYoutubeUrl, onLeave,
+  onEndTurn, onDiscardCard, onSyncYoutubeUrl, onPlayAgain, onLeave,
 }: Props) {
   const [movingWild, setMovingWild] = useState<{ cardId: string; fromColor: PropertyColor; validColors: PropertyColor[] } | null>(null);
 
@@ -346,9 +349,11 @@ export function MonopolyDealGame({
   const cardsLeft = 3 - room.cards_played_this_turn;
 
   const task = pa?.queue[0];
-  const isMyPaymentTurn = task?.playerId === myPlayerId && (pa?.jsnCount ?? 0) % 2 === 0;
+  const isMyPaymentTurn = pa?.type === 'payment' && task?.playerId === myPlayerId && (pa?.jsnCount ?? 0) % 2 === 0;
+  const isMyStealTargetTurn = (pa?.type === 'steal' || pa?.type === 'steal_set') && pa.targetId === myPlayerId && (pa.jsnCount ?? 0) % 2 === 0;
   const isMyJSNCounterTurn = pa && (pa.jsnCount ?? 0) % 2 === 1 && pa.actorId === myPlayerId;
-  const canJSN = isMyTurnToRespond && (pa?.jsnCount ?? 0) % 2 === 0 && hasJSNInHand && pa?.queue[0]?.playerId === myPlayerId;
+  const canJSN = isMyTurnToRespond && (pa?.jsnCount ?? 0) % 2 === 0 && hasJSNInHand &&
+    (pa?.type === 'payment' ? pa?.queue[0]?.playerId === myPlayerId : pa?.targetId === myPlayerId);
 
   const winner = room.winner_id ? room.players.find((p) => p.id === room.winner_id) : null;
 
@@ -399,8 +404,8 @@ export function MonopolyDealGame({
   // Hand label
   const handLabel = isDiscardMode
     ? `Defaussez jusqu'a 7 cartes (${myHand.length})`
-    : canPlay
-      ? `Main — ${cardsLeft} carte(s) a jouer`
+    : isMyTurn && room.turn_drawn
+      ? `Main (${myHand.length}) — encore ${cardsLeft} a jouer`
       : `Main (${myHand.length})`;
 
   // Status text for header
@@ -494,7 +499,12 @@ export function MonopolyDealGame({
             }}
           >
             {winner.name} a gagne avec 3 sets complets !
-            <div style={{ marginTop: 8 }}>
+            <div style={{ marginTop: 8, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {room.host_id === myPlayerId && (
+                <button className="btn btn-primary" style={{ background: 'rgba(255,255,255,0.25)', color: 'white', borderColor: 'rgba(255,255,255,0.4)' }} onClick={onPlayAgain}>
+                  Rejouer
+                </button>
+              )}
               <button className="btn btn-ghost" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }} onClick={onLeave}>
                 Retour au menu
               </button>
@@ -579,20 +589,30 @@ export function MonopolyDealGame({
               {pa.actionType === 'birthday' ? 'Anniversaire' :
                pa.actionType === 'debt_collector' ? 'Percepteur' :
                pa.actionType === 'rent' || pa.actionType === 'wild_rent' ? 'Loyer' :
+               pa.actionType === 'deal_breaker' ? 'Deal Breaker' :
+               pa.actionType === 'sly_deal' ? 'Vol de propriete' :
                'Action en cours'}
-              {' '}&mdash; demande par {room.players.find((p) => p.id === pa.actorId)?.name}
+              {' '}&mdash; par {room.players.find((p) => p.id === pa.actorId)?.name}
             </div>
 
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
-              {pa.queue.map((t) => {
-                const payer = room.players.find((p) => p.id === t.playerId);
-                return (
-                  <span key={t.playerId} style={{ marginRight: 10 }}>
-                    {payer?.name}: <strong style={{ color: 'var(--text-primary)' }}>${t.amount}M</strong>
-                  </span>
-                );
-              })}
-            </div>
+            {pa.type === 'steal' || pa.type === 'steal_set' ? (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+                Vole {pa.type === 'steal_set' ? 'le set' : 'une carte'}{' '}
+                {pa.targetColor && <span style={{ color: COLOR_BG[pa.targetColor], fontWeight: 700 }}>{COLOR_LABEL[pa.targetColor]}</span>}
+                {' '}de {room.players.find((p) => p.id === pa.targetId)?.name}
+              </div>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
+                {pa.queue.map((t) => {
+                  const payer = room.players.find((p) => p.id === t.playerId);
+                  return (
+                    <span key={t.playerId} style={{ marginRight: 10 }}>
+                      {payer?.name}: <strong style={{ color: 'var(--text-primary)' }}>${t.amount}M</strong>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
             {pa.jsnCount > 0 && (
               <div style={{ fontSize: 13, color: '#a78bfa', marginBottom: 8 }}>
@@ -616,7 +636,7 @@ export function MonopolyDealGame({
 
               const availPropTotal = ALL_COLORS.reduce((sum, c) => {
                 const set = safeSet(myPlayer, c);
-                return isSetComplete(c, set) ? sum : sum + set.reduce((s, card) => s + card.value, 0);
+                return sum + set.reduce((s, card) => s + card.value, 0);
               }, 0);
               const totalAvailable = myBankTotal + availPropTotal;
               const canSubmit = selectedTotal >= owed || selectedTotal >= totalAvailable;
@@ -655,13 +675,12 @@ export function MonopolyDealGame({
                   {ALL_COLORS.map((color) => {
                     const cards = safeSet(myPlayer, color);
                     if (!cards.length) return null;
-                    const isComplete = isSetComplete(color, cards);
-                    const locked = isComplete || !allBankSelected;
+                    const locked = !allBankSelected;
                     return (
                       <div key={color} style={{ marginBottom: 8 }}>
-                        <div style={{ fontSize: 12, marginBottom: 4, color: isComplete ? '#f87171' : locked ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
+                        <div style={{ fontSize: 12, marginBottom: 4, color: locked ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
                           {COLOR_LABEL[color]}
-                          {isComplete ? ' (set complet — protege)' : locked ? ' (donne d\'abord tout ton argent)' : ''}
+                          {locked ? ' (donne d\'abord tout ton argent)' : ''}
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                           {cards.map((c) => (
@@ -708,6 +727,27 @@ export function MonopolyDealGame({
                 </div>
               );
             })()}
+
+            {/* Steal target: JSN or accept */}
+            {isMyStealTargetTurn && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {canJSN && (
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 13, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
+                    onClick={() => {
+                      const jsnCard = myHand.find((c) => c.action === 'just_say_no');
+                      if (jsnCard) onRespondJSN(jsnCard.id);
+                    }}
+                  >
+                    Non Merci !
+                  </button>
+                )}
+                <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={onConfirmSteal}>
+                  Accepter le vol
+                </button>
+              </div>
+            )}
 
             {/* Counter-JSN or accept */}
             {isMyJSNCounterTurn && (
@@ -890,17 +930,22 @@ function PendingPlayOverlay({
 
   if (pendingPlay.step === 'action_choice') {
     const { card } = pendingPlay;
+    const isJSN = card.action === 'just_say_no';
     return (
       <Overlay onCancel={cancel}>
         <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{card.name}</h3>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-          Jouer comme action ou mettre a la banque (${card.value}M) ?
+          {isJSN
+            ? 'Non Merci ne peut etre joue qu\'en reaction. Mettre a la banque ?'
+            : 'Jouer comme action ou mettre a la banque ?'}
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onInitiateAction(card)}>
-            Jouer l'action
-          </button>
-          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => onPlayActionAsMoney(card)}>
+          {!isJSN && (
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onInitiateAction(card)}>
+              Jouer l'action
+            </button>
+          )}
+          <button className="btn btn-ghost" style={{ flex: isJSN ? undefined : 1 }} onClick={() => onPlayActionAsMoney(card)}>
             Banque (${card.value}M)
           </button>
         </div>
@@ -928,7 +973,18 @@ function PendingPlayOverlay({
             <button
               key={color}
               style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer', background: COLOR_BG[color], color: 'white', fontWeight: 700, fontSize: 13, border: 'none' }}
-              onClick={() => setPendingPlay({ step: 'rent_double', card, rentColor: color })}
+              onClick={() => {
+              if (!doubleRentCard) {
+                // No double rent card — skip straight to target/commit
+                if (card.action === 'wild_rent') {
+                  setPendingPlay({ step: 'rent_target', card, rentColor: color, doubleCard: null });
+                } else {
+                  onCommitRent(card, color, null, null);
+                }
+              } else {
+                setPendingPlay({ step: 'rent_double', card, rentColor: color });
+              }
+            }}
             >
               {COLOR_LABEL[color]}
             </button>

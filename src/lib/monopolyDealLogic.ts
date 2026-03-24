@@ -12,7 +12,8 @@ export type PropertyColor =
 export type ActionType =
   | 'just_say_no' | 'birthday' | 'debt_collector'
   | 'rent' | 'wild_rent' | 'double_rent'
-  | 'deal_breaker' | 'sly_deal' | 'forced_deal';
+  | 'deal_breaker' | 'sly_deal' | 'forced_deal'
+  | 'pass_go';
 
 export interface MDCard {
   id: string;
@@ -42,13 +43,17 @@ export interface PaymentTask {
 }
 
 export interface MDPendingAction {
-  type: 'payment';
+  type: 'payment' | 'steal' | 'steal_set';
   actorId: string;
   actionType: ActionType;
-  queue: PaymentTask[];      // remaining payers
+  queue: PaymentTask[];      // remaining payers (payment only)
   jsnCount: number;          // 0=target can JSN/pay, 1=actor can counter, 2=target again…
   card: MDCard;
   doubleRent?: boolean;
+  // steal / steal_set fields
+  targetId?: string;
+  targetColor?: PropertyColor;
+  targetCardId?: string;     // steal only (sly deal)
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -94,7 +99,8 @@ export const RENT: Record<PropertyColor, number[]> = {
 /** Rules data for the in-game / hub rules modal */
 export const MD_RULES: { title: string; body: string }[] = [
   { title: 'But du jeu', body: 'Être le premier à former 3 sets complets de propriétés.' },
-  { title: 'Tour de jeu', body: "Piochez 2 cartes (5 si votre main est vide). Jouez jusqu'à 3 cartes. Défaussez si vous avez plus de 7 cartes en main." },
+  { title: 'Tour de jeu', body: "Piochez 2 cartes (5 si votre main est vide). Jouez jusqu'à 3 cartes. Défaussez si vous avez plus de 7 cartes en fin de tour." },
+  { title: 'Passe par Go', body: "Piochez 2 cartes supplémentaires immédiatement. Peut aussi être jouée comme argent ($1M)." },
   { title: 'Jouer une carte', body: "Propriété → dans vos sets. Argent → dans votre banque. Carte action → effet immédiat. N'importe quelle carte → banque pour sa valeur en $." },
   { title: 'Loyer', body: 'Collectez un loyer auprès des autres joueurs selon le nombre de propriétés dans la couleur choisie.' },
   { title: 'Double Loyer', body: 'Jouez avec un loyer pour doubler le montant (compte comme 1 carte jouée supplémentaire).' },
@@ -108,6 +114,20 @@ export const MD_RULES: { title: string; body: string }[] = [
   { title: 'Paiement', body: "Payez depuis votre banque et/ou vos sets de propriétés. Si vous ne pouvez pas tout payer, donnez tout ce que vous avez." },
   { title: 'Jokers de propriété', body: "Peuvent être placés dans l'une de leurs couleurs valides. Déplaçables librement entre ces couleurs pendant votre tour (action gratuite)." },
 ];
+
+/** Short descriptions shown in action card info tooltips */
+export const ACTION_DESCRIPTIONS: Partial<Record<ActionType, string>> = {
+  just_say_no:    'Annule toute action jouée contre toi. Chaînable.',
+  birthday:       'Tous les joueurs te paient 2M.',
+  debt_collector: 'Un joueur de ton choix te paie 5M.',
+  rent:           'Collecte le loyer de tes propriétés d\'une couleur.',
+  wild_rent:      'Loyer d\'une couleur contre UN joueur ciblé.',
+  double_rent:    'Joue avec un loyer pour doubler le montant.',
+  deal_breaker:   'Vole un set COMPLET entier à un adversaire.',
+  sly_deal:       'Vole 1 propriété dans un set INCOMPLET.',
+  forced_deal:    'Échange une de tes propriétés contre celle d\'un adversaire.',
+  pass_go:        'Pioche 2 cartes supplémentaires immédiatement.',
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,34 +192,34 @@ export function createMonopolyDealDeck(): MDCard[] {
 
   // Properties: [color, name, value]
   const props: [PropertyColor, string, number][] = [
-    ['brown',     'Mediterranean Avenue', 1],
-    ['brown',     'Baltic Avenue',        1],
-    ['lightBlue', 'Connecticut Avenue',   1],
-    ['lightBlue', 'Oriental Avenue',      1],
-    ['lightBlue', 'Vermont Avenue',       1],
-    ['pink',      'St. Charles Place',    2],
-    ['pink',      'States Avenue',        2],
-    ['pink',      'Virginia Avenue',      2],
-    ['orange',    'St. James Place',      2],
-    ['orange',    'Tennessee Avenue',     2],
-    ['orange',    'New York Avenue',      2],
-    ['red',       'Indiana Avenue',       3],
-    ['red',       'Illinois Avenue',      3],
-    ['red',       'Kentucky Avenue',      3],
-    ['yellow',    'Atlantic Avenue',      3],
-    ['yellow',    'Ventnor Avenue',       3],
-    ['yellow',    'Marvin Gardens',       3],
-    ['green',     'Pacific Avenue',       4],
-    ['green',     'North Carolina Ave',   4],
-    ['green',     'Pennsylvania Ave',     4],
-    ['blue',      'Boardwalk',            4],
-    ['blue',      'Park Place',           4],
-    ['railroad',  'Reading Railroad',     2],
-    ['railroad',  'Pennsylvania Railroad',2],
-    ['railroad',  'B&O Railroad',         2],
-    ['railroad',  'Short Line Railroad',  2],
-    ['utility',   'Electric Company',     2],
-    ['utility',   'Water Works',          2],
+    ['brown',     'Rue Lecourbe',              1],
+    ['brown',     'Rue de Vaugirard',          1],
+    ['lightBlue', 'Bvd de la Villette',        1],
+    ['lightBlue', 'Avenue de Clichy',          1],
+    ['lightBlue', 'Rue La Fayette',            1],
+    ['pink',      'Rue Saint-Lazare',          2],
+    ['pink',      'Rue Championnet',           2],
+    ['pink',      "Avenue d'Iéna",             2],
+    ['orange',    'Rue de Lyon',               2],
+    ['orange',    "Rue d'Alésia",              2],
+    ['orange',    'Boulevard Voltaire',        2],
+    ['red',       'Avenue de Villiers',        3],
+    ['red',       'Rue Oberkampf',             3],
+    ['red',       'Boulevard Haussmann',       3],
+    ['yellow',    'Rue de Rivoli',             3],
+    ['yellow',    'Avenue Kléber',             3],
+    ['yellow',    'Avenue de Breteuil',        3],
+    ['green',     'Rue Molière',               4],
+    ['green',     'Bvd Beaumarchais',          4],
+    ['green',     'Avenue de Wagram',          4],
+    ['blue',      'Av. des Champs-Élysées',    4],
+    ['blue',      'Rue de la Paix',            4],
+    ['railroad',  'Gare du Nord',              2],
+    ['railroad',  "Gare de l'Est",             2],
+    ['railroad',  'Gare de Lyon',              2],
+    ['railroad',  'Gare Montparnasse',         2],
+    ['utility',   "Cie d'Électricité",         2],
+    ['utility',   'Cie des Eaux',              2],
   ];
   for (const [color, name, value] of props) {
     cards.push(mk({ type: 'property', name, value, color }));
@@ -223,6 +243,7 @@ export function createMonopolyDealDeck(): MDCard[] {
 
   // Actions: [action, name, value, count, rentColors?]
   const actions: [ActionType, string, number, number, PropertyColor[]?][] = [
+    ['pass_go',       'Passe par Go',      1, 10],
     ['just_say_no',   'Non Merci !',       4, 3],
     ['birthday',      'Anniversaire',      2, 3],
     ['debt_collector','Percepteur',        3, 3],

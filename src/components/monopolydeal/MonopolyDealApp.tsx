@@ -18,6 +18,7 @@ export function MonopolyDealApp({ onGoBack }: Props) {
     createRoom, joinRoom, startGame, leaveRoom,
     playMoney, playProperty, initiateAction, commitPassGo,
     commitDebt, commitRent, commitDealBreaker, commitSlyDeal, commitForcedDeal,
+    confirmSteal,
     respondJSN, acceptCancellation,
     submitPayment, moveWild,
     endTurn, discardCard,
@@ -51,6 +52,7 @@ export function MonopolyDealApp({ onGoBack }: Props) {
         onCommitDealBreaker={commitDealBreaker}
         onCommitSlyDeal={commitSlyDeal}
         onCommitForcedDeal={commitForcedDeal}
+        onConfirmSteal={confirmSteal}
         onRespondJSN={respondJSN}
         onAcceptCancellation={acceptCancellation}
         onSubmitPayment={submitPayment}
@@ -58,6 +60,7 @@ export function MonopolyDealApp({ onGoBack }: Props) {
         onEndTurn={endTurn}
         onDiscardCard={discardCard}
         onSyncYoutubeUrl={syncYoutubeUrl}
+        onPlayAgain={startGame}
         onLeave={room.status === 'finished' ? handleLeaveToHub : handleLeave}
       />
     );

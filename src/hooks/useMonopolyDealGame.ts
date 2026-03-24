@@ -366,6 +366,7 @@ export function useMonopolyDealGame() {
   }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Deal Breaker ──────────────────────────────────────────────────────────
+  // Creates a steal_set pending action — target gets a chance to play Just Say No
 
   const commitDealBreaker = useCallback(async (card: MDCard, targetId: string, color: PropertyColor) => {
     const r = roomRef.current;
@@ -373,60 +374,92 @@ export function useMonopolyDealGame() {
 
     const target = r.players.find((p) => p.id === targetId);
     if (!target) return;
-    const stolenSet = safeSet(target, color);
-    if (!isSetComplete(color, stolenSet)) return;
+    if (!isSetComplete(color, safeSet(target, color))) return;
 
     const newHand = handRef.current.filter((c) => c.id !== card.id);
-    let players = updatePlayer(r.players, targetId, (p) => {
-      const sets = { ...safeSets(p) };
-      delete sets[color];
-      return { ...p, sets };
-    });
-    players = updatePlayer(players, myPlayerId, (p) => {
-      const sets = safeSets(p);
-      const existing = sets[color] ?? [];
-      return { ...p, sets: { ...sets, [color]: [...existing, ...stolenSet] } };
-    });
-
-    const winner = checkWinner(players);
     const discard = [...r.discard_pile, card];
+    const pending: MDPendingAction = {
+      type: 'steal_set', actorId: myPlayerId, actionType: 'deal_breaker',
+      queue: [], jsnCount: 0, card, targetId, targetColor: color,
+    };
     setPendingPlay(null);
     await Promise.all([
       updateMDHand(r.id, myPlayerId, newHand),
       updateMDRoom(r.room_code, {
-        players, discard_pile: discard,
+        discard_pile: discard,
         cards_played_this_turn: r.cards_played_this_turn + 1,
-        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+        pending_action: pending,
       }),
     ]);
     setMyHand(newHand);
   }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Sly Deal ──────────────────────────────────────────────────────────────
+  // Creates a steal pending action — target gets a chance to play Just Say No
 
   const commitSlyDeal = useCallback(async (card: MDCard, targetId: string, cardId: string, color: PropertyColor) => {
     const r = roomRef.current;
     if (!r || !canPlay(r)) return;
 
-    let [newTarget, stolen] = takeFromSet(r.players.find((p) => p.id === targetId)!, cardId, color);
-    if (!stolen) return;
-
-    let players = updatePlayer(r.players, targetId, () => newTarget);
-    players = updatePlayer(players, myPlayerId, (p) => addToSet(p, stolen!, color));
-
-    const winner = checkWinner(players);
     const newHand = handRef.current.filter((c) => c.id !== card.id);
     const discard = [...r.discard_pile, card];
+    const pending: MDPendingAction = {
+      type: 'steal', actorId: myPlayerId, actionType: 'sly_deal',
+      queue: [], jsnCount: 0, card, targetId, targetColor: color, targetCardId: cardId,
+    };
     setPendingPlay(null);
     await Promise.all([
       updateMDHand(r.id, myPlayerId, newHand),
       updateMDRoom(r.room_code, {
-        players, discard_pile: discard,
+        discard_pile: discard,
         cards_played_this_turn: r.cards_played_this_turn + 1,
-        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+        pending_action: pending,
       }),
     ]);
     setMyHand(newHand);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Confirm Steal (execute after JSN window passes) ──────────────────────
+
+  const confirmSteal = useCallback(async () => {
+    const r = roomRef.current;
+    if (!r?.pending_action) return;
+    const pa = r.pending_action;
+    if ((pa.type !== 'steal' && pa.type !== 'steal_set') || !pa.targetId || !pa.targetColor) return;
+
+    if (pa.type === 'steal_set') {
+      const target = r.players.find((p) => p.id === pa.targetId);
+      if (!target) return;
+      const stolenSet = safeSet(target, pa.targetColor);
+      let players = updatePlayer(r.players, pa.targetId, (p) => {
+        const sets = { ...safeSets(p) };
+        delete sets[pa.targetColor!];
+        return { ...p, sets };
+      });
+      players = updatePlayer(players, myPlayerId, (p) => {
+        const sets = safeSets(p);
+        const existing = sets[pa.targetColor!] ?? [];
+        return { ...p, sets: { ...sets, [pa.targetColor!]: [...existing, ...stolenSet] } };
+      });
+      const winner = checkWinner(players);
+      await updateMDRoom(r.room_code, {
+        players, pending_action: null,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      });
+    } else {
+      if (!pa.targetCardId) return;
+      const target = r.players.find((p) => p.id === pa.targetId);
+      if (!target) return;
+      const [newTarget, stolen] = takeFromSet(target, pa.targetCardId, pa.targetColor);
+      if (!stolen) return;
+      let players = updatePlayer(r.players, pa.targetId, () => newTarget);
+      players = updatePlayer(players, myPlayerId, (p) => addToSet(p, stolen, pa.targetColor!));
+      const winner = checkWinner(players);
+      await updateMDRoom(r.room_code, {
+        players, pending_action: null,
+        status: winner ? 'finished' : 'playing', winner_id: winner ?? null,
+      });
+    }
   }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Forced Deal ───────────────────────────────────────────────────────────
@@ -486,7 +519,16 @@ export function useMonopolyDealGame() {
   const acceptCancellation = useCallback(async () => {
     const r = roomRef.current;
     if (!r?.pending_action) return;
-    await updateMDRoom(r.room_code, { pending_action: null });
+    const pa = r.pending_action;
+    if (pa.type === 'payment') {
+      // Skip current payer (the one who played JSN), continue with rest of queue
+      const [, ...restQueue] = pa.queue;
+      const newPa = restQueue.length > 0 ? { ...pa, queue: restQueue, jsnCount: 0 } : null;
+      await updateMDRoom(r.room_code, { pending_action: newPa });
+    } else {
+      // steal / steal_set: actor accepts that the steal is cancelled
+      await updateMDRoom(r.room_code, { pending_action: null });
+    }
   }, []);
 
   // ─── Payment ───────────────────────────────────────────────────────────────
@@ -658,12 +700,19 @@ export function useMonopolyDealGame() {
   let isMyTurnToRespond = false;
   if (room?.pending_action) {
     const pa = room.pending_action;
-    if (pa.jsnCount % 2 === 0) {
-      // Even: target / current payer acts
-      isMyTurnToRespond = pa.queue[0]?.playerId === myPlayerId;
+    if (pa.type === 'payment') {
+      if (pa.jsnCount % 2 === 0) {
+        isMyTurnToRespond = pa.queue[0]?.playerId === myPlayerId;
+      } else {
+        isMyTurnToRespond = pa.actorId === myPlayerId;
+      }
     } else {
-      // Odd: actor can counter-JSN or accept cancellation
-      isMyTurnToRespond = pa.actorId === myPlayerId;
+      // steal / steal_set
+      if (pa.jsnCount % 2 === 0) {
+        isMyTurnToRespond = pa.targetId === myPlayerId;
+      } else {
+        isMyTurnToRespond = pa.actorId === myPlayerId;
+      }
     }
   }
 
@@ -681,6 +730,7 @@ export function useMonopolyDealGame() {
     commitPassGo, initiateAction,
     commitDebt, commitRent,
     commitDealBreaker, commitSlyDeal, commitForcedDeal,
+    confirmSteal,
     respondJSN, acceptCancellation,
     submitPayment, moveWild,
     endTurn, discardCard,
