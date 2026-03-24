@@ -86,20 +86,17 @@ function PropertySet({
 // ─── Compact opponent chip ─────────────────────────────────────────────────────
 
 function OpponentChip({
-  player, isCurrentTurn, onSetCardClick,
+  player, isCurrentTurn, onClick,
 }: {
   player: MDPlayer;
   isCurrentTurn: boolean;
-  onSetCardClick?: (card: MDCard, color: PropertyColor, player: MDPlayer) => void;
+  onClick: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const sets = safeSets(player);
   const bank = safeBank(player);
   const bankTotal = getBankTotal(player);
   const completeSets = countCompleteSets(player);
+  const sets = safeSets(player);
   const colorsWithCards = ALL_COLORS.filter((c) => (sets[c]?.length ?? 0) > 0);
-
-  // Compact denomination display e.g. "1·1·2·5"
   const denomLabel = bank.length > 0
     ? bank.map((c) => `$${c.denomination ?? c.value}M`).join(' ')
     : 'vide';
@@ -116,92 +113,128 @@ function OpponentChip({
         cursor: 'pointer',
         transition: 'border-color 0.15s',
       }}
-      onClick={() => setExpanded((e) => !e)}
+      onClick={onClick}
     >
-      {/* Name + win badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
         {isCurrentTurn && (
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: '#facc15', flexShrink: 0,
-            boxShadow: '0 0 6px #facc15',
-          }} />
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#facc15', flexShrink: 0, boxShadow: '0 0 6px #facc15' }} />
         )}
-        <span style={{
-          fontSize: 12, fontWeight: 700, color: 'var(--text-primary)',
-          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {player.name}
         </span>
         {completeSets >= 3 && (
-          <span style={{
-            fontSize: 9, background: '#16a34a', color: 'white',
-            padding: '1px 5px', borderRadius: 8, fontWeight: 700,
-          }}>
-            GAGNE
-          </span>
+          <span style={{ fontSize: 9, background: '#16a34a', color: 'white', padding: '1px 5px', borderRadius: 8, fontWeight: 700 }}>GAGNE</span>
         )}
       </div>
-
-      {/* Stats row */}
       <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--text-muted)', marginBottom: 3 }}>
         <span style={{ color: '#86efac', fontWeight: 700 }}>${bankTotal}M</span>
         <span>{completeSets}/3 sets</span>
       </div>
-      {/* Bank denomination breakdown */}
-      <div style={{ fontSize: 11, color: 'rgba(134,239,172,0.8)', marginBottom: 5, fontWeight: 600 }}>
-        {denomLabel}
-      </div>
-
-      {/* Set color badges */}
+      <div style={{ fontSize: 11, color: 'rgba(134,239,172,0.8)', marginBottom: 5, fontWeight: 600 }}>{denomLabel}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
         {colorsWithCards.map((color) => {
           const count = sets[color]?.length ?? 0;
-          const total = SET_SIZES[color];
-          const complete = count >= total;
+          const complete = count >= SET_SIZES[color];
           return (
             <div key={color} style={{
-              display: 'flex', alignItems: 'center',
               background: complete ? COLOR_BG[color] : `${COLOR_BG[color]}55`,
               borderRadius: 4, padding: '2px 5px',
               border: complete ? `1px solid ${COLOR_BG[color]}` : '1px solid rgba(255,255,255,0.12)',
             }}>
-              <span style={{ fontSize: 8, color: 'white', fontWeight: 800 }}>{count}/{total}</span>
+              <span style={{ fontSize: 8, color: 'white', fontWeight: 800 }}>{count}/{SET_SIZES[color]}</span>
             </div>
           );
         })}
       </div>
-
-      {/* Expanded: bank cards + full sets */}
-      {expanded && (
-        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {bank.length > 0 && (
-            <div>
-              <div style={{ fontSize: 8, fontWeight: 700, color: '#86efac', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Banque</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                {bank.map((c) => <MDCardComponent key={c.id} card={c} size="sm" />)}
-              </div>
-            </div>
-          )}
-          {colorsWithCards.length > 0 && (
-            <div>
-              <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Proprietes</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {colorsWithCards.map((color) => (
-                  <PropertySet
-                    key={color}
-                    color={color}
-                    cards={sets[color] ?? []}
-                    size="sm"
-                    onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c, player) : undefined}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
+  );
+}
+
+// ─── Opponent detail modal ─────────────────────────────────────────────────────
+
+function OpponentDetail({
+  player, onClose, onSetCardClick,
+}: {
+  player: MDPlayer;
+  onClose: () => void;
+  onSetCardClick?: (card: MDCard, color: PropertyColor, player: MDPlayer) => void;
+}) {
+  const bank = safeBank(player);
+  const sets = safeSets(player);
+  const bankTotal = getBankTotal(player);
+  const completeSets = countCompleteSets(player);
+  const colorsWithCards = ALL_COLORS.filter((c) => (sets[c]?.length ?? 0) > 0);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        background: 'rgba(0,0,0,0.75)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        padding: 0,
+      }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: 80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 80, opacity: 0 }}
+        style={{
+          background: 'var(--bg-card)',
+          borderRadius: '16px 16px 0 0',
+          padding: '16px 16px 24px',
+          width: '100%', maxWidth: 540,
+          maxHeight: '80vh', overflowY: 'auto',
+          border: '1px solid var(--border-color)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div>
+            <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{player.name}</span>
+            <span style={{ fontSize: 12, color: '#86efac', fontWeight: 600, marginLeft: 10 }}>${bankTotal}M</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{completeSets}/3 sets</span>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Bank */}
+        {bank.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#86efac', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Banque</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {bank.map((c) => <MDCardComponent key={c.id} card={c} size="sm" />)}
+            </div>
+          </div>
+        )}
+
+        {/* Sets */}
+        {colorsWithCards.length > 0 && (
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>Proprietes</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {colorsWithCards.map((color) => (
+                <PropertySet
+                  key={color}
+                  color={color}
+                  cards={sets[color] ?? []}
+                  size="sm"
+                  onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c, player) : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {bank.length === 0 && colorsWithCards.length === 0 && (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>Aucune carte posee</p>
+        )}
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -339,6 +372,7 @@ export function MonopolyDealGame({
   onEndTurn, onDiscardCard, onSyncYoutubeUrl, onPlayAgain, onLeave,
 }: Props) {
   const [movingWild, setMovingWild] = useState<{ cardId: string; fromColor: PropertyColor; validColors: PropertyColor[] } | null>(null);
+  const [expandedOpponentId, setExpandedOpponentId] = useState<string | null>(null);
 
   const myPlayer = room.players.find((p) => p.id === myPlayerId)!;
   const otherPlayers = room.players.filter((p) => p.id !== myPlayerId);
@@ -478,6 +512,7 @@ export function MonopolyDealGame({
                 key={p.id}
                 player={p}
                 isCurrentTurn={p.id === currentPlayer?.id}
+                onClick={() => setExpandedOpponentId(p.id)}
               />
             ))}
           </div>
@@ -851,6 +886,14 @@ export function MonopolyDealGame({
             </div>
           </Overlay>
         )}
+      </AnimatePresence>
+
+      {/* ── Opponent detail modal ── */}
+      <AnimatePresence>
+        {expandedOpponentId && (() => {
+          const p = room.players.find((pl) => pl.id === expandedOpponentId);
+          return p ? <OpponentDetail player={p} onClose={() => setExpandedOpponentId(null)} /> : null;
+        })()}
       </AnimatePresence>
 
       {/* ── PendingPlay overlays ── */}
