@@ -92,9 +92,15 @@ function OpponentChip({
 }) {
   const [expanded, setExpanded] = useState(false);
   const sets = safeSets(player);
+  const bank = safeBank(player);
   const bankTotal = getBankTotal(player);
   const completeSets = countCompleteSets(player);
   const colorsWithCards = ALL_COLORS.filter((c) => (sets[c]?.length ?? 0) > 0);
+
+  // Compact denomination display e.g. "1·1·2·5"
+  const denomLabel = bank.length > 0
+    ? bank.map((c) => `$${c.denomination ?? c.value}M`).join(' ')
+    : 'vide';
 
   return (
     <div
@@ -136,9 +142,13 @@ function OpponentChip({
       </div>
 
       {/* Stats row */}
-      <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', marginBottom: 5 }}>
+      <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>
         <span style={{ color: '#86efac', fontWeight: 700 }}>${bankTotal}M</span>
         <span>{completeSets}/3 sets</span>
+      </div>
+      {/* Bank denomination breakdown */}
+      <div style={{ fontSize: 9, color: 'rgba(134,239,172,0.7)', marginBottom: 5, fontWeight: 600 }}>
+        {denomLabel}
       </div>
 
       {/* Set color badges */}
@@ -160,18 +170,33 @@ function OpponentChip({
         })}
       </div>
 
-      {/* Expanded: full sets */}
-      {expanded && colorsWithCards.length > 0 && (
-        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-          {colorsWithCards.map((color) => (
-            <PropertySet
-              key={color}
-              color={color}
-              cards={sets[color] ?? []}
-              size="sm"
-              onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c, player) : undefined}
-            />
-          ))}
+      {/* Expanded: bank cards + full sets */}
+      {expanded && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {bank.length > 0 && (
+            <div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: '#86efac', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Banque</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                {bank.map((c) => <MDCardComponent key={c.id} card={c} size="sm" />)}
+              </div>
+            </div>
+          )}
+          {colorsWithCards.length > 0 && (
+            <div>
+              <div style={{ fontSize: 8, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Proprietes</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {colorsWithCards.map((color) => (
+                  <PropertySet
+                    key={color}
+                    color={color}
+                    cards={sets[color] ?? []}
+                    size="sm"
+                    onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c, player) : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -566,68 +591,135 @@ export function MonopolyDealGame({
             )}
 
             {/* My payment turn */}
-            {isMyPaymentTurn && (
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  Tu dois payer ${task!.amount}M. Selectonne les cartes :
-                </div>
-                <div style={{ marginBottom: 6 }}>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Banque</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {safeBank(myPlayer).map((c) => (
-                      <MDCardComponent
-                        key={c.id} card={c} size="sm"
-                        selected={!!paymentSelection.find((s) => s.id === c.id)}
-                        onClick={() => togglePaymentCard(c)}
-                      />
-                    ))}
+            {isMyPaymentTurn && (() => {
+              const owed = task!.amount;
+              const bankCards = safeBank(myPlayer);
+              const myBankTotal = getBankTotal(myPlayer);
+              // Rule: must give all bank before giving properties
+              const mustGiveAllBank = myBankTotal < owed;
+
+              // Total of all non-complete property cards I could give
+              const availPropCards = ALL_COLORS.flatMap((c) => {
+                const set = safeSet(myPlayer, c);
+                return isSetComplete(c, set) ? [] : set;
+              });
+              const availPropTotal = availPropCards.reduce((s, c) => s + c.value, 0);
+              const totalAvailable = myBankTotal + availPropTotal;
+
+              // Effective total that will be submitted
+              const selectedPropTotal = paymentSelection.reduce((s, c) => s + c.value, 0);
+              const effectiveTotal = mustGiveAllBank
+                ? myBankTotal + selectedPropTotal
+                : paymentSelection.reduce((s, c) => s + c.value, 0);
+
+              // Can submit: paid enough, OR gave everything available
+              const canSubmit = effectiveTotal >= owed || effectiveTotal >= totalAvailable;
+
+              // Locked bank cards (mustGiveAllBank): can't deselect, always included
+              // Normal bank cards: player selects until >= owed
+              const propSelectable = mustGiveAllBank; // properties only selectable when bank is insufficient
+              const bankSelectable = !mustGiveAllBank;
+
+              const handleSubmit = () => {
+                const ids = mustGiveAllBank
+                  ? [...bankCards.map((c) => c.id), ...paymentSelection.map((c) => c.id)]
+                  : paymentSelection.map((c) => c.id);
+                onSubmitPayment(ids);
+              };
+
+              return (
+                <div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    Tu dois payer <strong>${owed}M</strong>.{' '}
+                    {mustGiveAllBank
+                      ? `Ta banque ($${myBankTotal}M) sera donnee en entier. Selectionne des proprietes pour completer.`
+                      : `Selectionne des billets dans ta banque.`}
                   </div>
-                </div>
-                {ALL_COLORS.map((color) => {
-                  const cards = safeSet(myPlayer, color);
-                  if (!cards.length) return null;
-                  const isComplete = isSetComplete(color, cards);
-                  return (
-                    <div key={color} style={{ marginBottom: 4 }}>
-                      <div style={{ fontSize: 10, color: isComplete ? '#f87171' : 'var(--text-muted)', marginBottom: 2 }}>
-                        {COLOR_LABEL[color]}{isComplete ? ' (set complet — protege)' : ''}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                        {cards.map((c) => (
-                          <MDCardComponent
-                            key={c.id} card={c} size="sm"
-                            selected={!!paymentSelection.find((s) => s.id === c.id)}
-                            disabled={isComplete}
-                            onClick={isComplete ? undefined : () => togglePaymentCard(c)}
-                          />
-                        ))}
-                      </div>
+
+                  {/* Bank section */}
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, color: '#86efac', fontWeight: 700, marginBottom: 4 }}>
+                      Banque — ${myBankTotal}M
+                      {mustGiveAllBank && (
+                        <span style={{ color: '#f87171', marginLeft: 6 }}>(tout inclus automatiquement)</span>
+                      )}
                     </div>
-                  );
-                })}
-                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                  {canJSN && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {bankCards.map((c) => (
+                        <MDCardComponent
+                          key={c.id} card={c} size="sm"
+                          selected={mustGiveAllBank || !!paymentSelection.find((s) => s.id === c.id)}
+                          disabled={mustGiveAllBank}
+                          onClick={bankSelectable ? () => togglePaymentCard(c) : undefined}
+                        />
+                      ))}
+                      {bankCards.length === 0 && (
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Banque vide</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Properties section */}
+                  {ALL_COLORS.map((color) => {
+                    const cards = safeSet(myPlayer, color);
+                    if (!cards.length) return null;
+                    const isComplete = isSetComplete(color, cards);
+                    const isLocked = isComplete || !propSelectable;
+                    return (
+                      <div key={color} style={{ marginBottom: 4 }}>
+                        <div style={{ fontSize: 10, marginBottom: 2, color: isComplete ? '#f87171' : propSelectable ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                          {COLOR_LABEL[color]}
+                          {isComplete ? ' (set complet — protege)' : !propSelectable ? ' (banque suffisante — non necessaire)' : ''}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                          {cards.map((c) => (
+                            <MDCardComponent
+                              key={c.id} card={c} size="sm"
+                              selected={propSelectable && !isComplete && !!paymentSelection.find((s) => s.id === c.id)}
+                              disabled={isLocked}
+                              onClick={isLocked ? undefined : () => togglePaymentCard(c)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Action buttons */}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {canJSN && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 12, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
+                        onClick={() => {
+                          const jsnCard = myHand.find((c) => c.action === 'just_say_no');
+                          if (jsnCard) onRespondJSN(jsnCard.id);
+                        }}
+                      >
+                        Non Merci !
+                      </button>
+                    )}
                     <button
                       className="btn btn-primary"
-                      style={{ fontSize: 12, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
-                      onClick={() => {
-                        const jsnCard = myHand.find((c) => c.action === 'just_say_no');
-                        if (jsnCard) onRespondJSN(jsnCard.id);
+                      style={{
+                        fontSize: 12,
+                        opacity: canSubmit ? 1 : 0.4,
+                        cursor: canSubmit ? 'pointer' : 'not-allowed',
                       }}
+                      disabled={!canSubmit}
+                      onClick={canSubmit ? handleSubmit : undefined}
                     >
-                      Non Merci !
+                      Payer ({effectiveTotal}M / {owed}M)
                     </button>
-                  )}
-                  <button
-                    className="btn btn-primary"
-                    style={{ fontSize: 12 }}
-                    onClick={() => onSubmitPayment(paymentSelection.map((c) => c.id))}
-                  >
-                    Payer ({paymentSelection.reduce((s, c) => s + c.value, 0)}M / {task!.amount}M)
-                  </button>
+                    {!canSubmit && (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        Selectionne pour atteindre ${owed}M
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Counter-JSN or accept */}
             {isMyJSNCounterTurn && (
