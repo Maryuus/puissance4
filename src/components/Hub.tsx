@@ -166,6 +166,9 @@ export function Hub({ onSelectGame }: HubProps) {
         <motion.p className="menu-footer" variants={itemVariants}>
           Plus de jeux à venir !
         </motion.p>
+        <motion.p variants={itemVariants} style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', marginTop: 4 }}>
+          v{__APP_VERSION__}
+        </motion.p>
       </motion.div>
 
       {/* Monopoly Deal Rules Modal */}
