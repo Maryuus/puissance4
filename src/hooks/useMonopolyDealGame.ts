@@ -6,6 +6,7 @@ import {
   isSetComplete, countCompleteSets, getRent, getOrCreatePlayerId,
   shuffleDeck,
 } from '../lib/monopolyDealLogic';
+export type { ActionType };
 import {
   MDRoomRow,
   createMDRoom, joinMDRoom, getMDRoom, startMDGame,
@@ -150,6 +151,38 @@ export function useMonopolyDealGame() {
     else newSets[color] = newSet;
     return [{ ...p, sets: newSets }, card];
   }
+
+  // ─── Pass Go (draw 2 extra cards) ─────────────────────────────────────────
+
+  const commitPassGo = useCallback(async (card: MDCard) => {
+    const r = roomRef.current;
+    if (!r || !canPlay(r)) return;
+
+    const newHand = handRef.current.filter((c) => c.id !== card.id);
+    let deck = [...(r.deck ?? [])];
+    let discard = [...(r.discard_pile ?? [])];
+
+    if (deck.length < 2 && discard.length > 1) {
+      const top = discard[discard.length - 1];
+      deck = [...deck, ...shuffleDeck(discard.slice(0, -1))];
+      discard = [top];
+    }
+
+    const drawn = deck.splice(-Math.min(2, deck.length));
+    const finalHand = [...newHand, ...drawn];
+    const finalDiscard = [...discard, card];
+
+    setPendingPlay(null);
+    await Promise.all([
+      updateMDHand(r.id, myPlayerId, finalHand),
+      updateMDRoom(r.room_code, {
+        deck,
+        discard_pile: finalDiscard,
+        cards_played_this_turn: r.cards_played_this_turn + 1,
+      }),
+    ]);
+    setMyHand(finalHand);
+  }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Draw ──────────────────────────────────────────────────────────────────
 
@@ -468,19 +501,34 @@ export function useMonopolyDealGame() {
     const payer = r.players.find((p) => p.id === myPlayerId)!;
     const actor = r.players.find((p) => p.id === pa.actorId)!;
 
-    const selectedCards: MDCard[] = [];
+    // Track each card + which color set it came from (needed for properties)
+    const selectedCards: { card: MDCard; fromColor?: PropertyColor }[] = [];
     let newPayer = { ...payer, bank: safeBank(payer), sets: { ...safeSets(payer) } };
 
     for (const id of cardIds) {
       const [np1, c1] = takeFromBank(newPayer, id);
-      if (c1) { newPayer = np1; selectedCards.push(c1); continue; }
+      if (c1) { newPayer = np1; selectedCards.push({ card: c1 }); continue; }
       for (const color of ALL_COLORS) {
         const [np2, c2] = takeFromSet(newPayer, id, color);
-        if (c2) { newPayer = np2; selectedCards.push(c2); break; }
+        if (c2) { newPayer = np2; selectedCards.push({ card: c2, fromColor: color }); break; }
       }
     }
 
-    let newActor = { ...actor, bank: [...safeBank(actor), ...selectedCards], sets: { ...safeSets(actor) } };
+    // Money cards go to actor's bank; property/wild cards go to actor's sets
+    let newActor = { ...actor, bank: [...safeBank(actor)], sets: { ...safeSets(actor) } };
+    for (const { card, fromColor } of selectedCards) {
+      if (card.type === 'money') {
+        newActor = { ...newActor, bank: [...newActor.bank, card] };
+      } else {
+        const color = fromColor ?? card.color;
+        if (color) {
+          newActor = addToSet(newActor, card, color);
+        } else {
+          // Fallback for wild with no color context
+          newActor = { ...newActor, bank: [...newActor.bank, card] };
+        }
+      }
+    }
 
     let players = updatePlayer(r.players, myPlayerId, () => newPayer);
     players = updatePlayer(players, pa.actorId, () => newActor);
@@ -630,7 +678,7 @@ export function useMonopolyDealGame() {
     // actions
     createRoom, joinRoom, startGame, leaveRoom,
     drawCards, playMoney, playProperty,
-    initiateAction,
+    commitPassGo, initiateAction,
     commitDebt, commitRent,
     commitDealBreaker, commitSlyDeal, commitForcedDeal,
     respondJSN, acceptCancellation,

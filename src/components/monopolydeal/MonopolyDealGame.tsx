@@ -142,12 +142,12 @@ function OpponentChip({
       </div>
 
       {/* Stats row */}
-      <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>
+      <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--text-muted)', marginBottom: 3 }}>
         <span style={{ color: '#86efac', fontWeight: 700 }}>${bankTotal}M</span>
         <span>{completeSets}/3 sets</span>
       </div>
       {/* Bank denomination breakdown */}
-      <div style={{ fontSize: 9, color: 'rgba(134,239,172,0.7)', marginBottom: 5, fontWeight: 600 }}>
+      <div style={{ fontSize: 11, color: 'rgba(134,239,172,0.8)', marginBottom: 5, fontWeight: 600 }}>
         {denomLabel}
       </div>
 
@@ -421,24 +421,33 @@ export function MonopolyDealGame({
       {/* ── Header ── */}
       <div style={{
         flexShrink: 0,
-        display: 'flex', alignItems: 'center', gap: 8,
         padding: '8px 12px',
         background: 'var(--bg-secondary)',
         borderBottom: '1px solid rgba(255,255,255,0.07)',
-        flexWrap: 'wrap',
       }}>
-        <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 14, letterSpacing: 0.3 }}>
-          Monopoly Deal
-        </span>
-        <span style={{ fontSize: 12, color: isMyTurn ? '#facc15' : 'var(--text-muted)', flex: 1, fontWeight: isMyTurn ? 600 : 400 }}>
-          {statusText}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Row 1: title + quit */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 15, flex: 1 }}>
+            Monopoly Deal
+          </span>
           <MusicPlayer inline syncedUrl={room.youtube_url ?? undefined} onUrlChange={onSyncYoutubeUrl} />
+          <button className="btn btn-ghost" style={{ fontSize: 13, padding: '5px 12px' }} onClick={onLeave}>
+            Quitter
+          </button>
+        </div>
+        {/* Row 2: status + end turn */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{
+            fontSize: 13, flex: 1,
+            color: isMyTurn ? '#facc15' : 'var(--text-muted)',
+            fontWeight: isMyTurn ? 600 : 400,
+          }}>
+            {statusText}
+          </span>
           {isMyTurn && !pa && room.turn_drawn && (
             <motion.button
               className="btn btn-primary"
-              style={{ fontSize: 12, padding: '4px 12px' }}
+              style={{ fontSize: 13, padding: '5px 14px', flexShrink: 0 }}
               onClick={onEndTurn}
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
@@ -446,9 +455,6 @@ export function MonopolyDealGame({
               Fin du tour
             </motion.button>
           )}
-          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={onLeave}>
-            Quitter
-          </button>
         </div>
       </div>
 
@@ -492,68 +498,66 @@ export function MonopolyDealGame({
 
         {/* Center table: deck / discard / draw info */}
         <div style={{
-          display: 'flex', gap: 10, alignItems: 'center',
           padding: '10px 14px', borderRadius: 10,
           background: 'rgba(0,80,40,0.25)',
           border: '1.5px solid rgba(0,160,80,0.2)',
-          flexWrap: 'wrap',
         }}>
-          {/* Deck */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            <div style={{
-              width: 42, height: 58, borderRadius: 6, flexShrink: 0,
-              background: 'repeating-linear-gradient(45deg,#1e3a5f,#1e3a5f 4px,#0f2744 4px,#0f2744 8px)',
-              border: '1.5px solid #334155',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ fontSize: 16, fontWeight: 900, color: 'rgba(255,255,255,0.4)' }}>?</span>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Deck */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 38, height: 52, borderRadius: 5, flexShrink: 0,
+                background: 'repeating-linear-gradient(45deg,#1e3a5f,#1e3a5f 4px,#0f2744 4px,#0f2744 8px)',
+                border: '1.5px solid #334155',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <span style={{ fontSize: 14, fontWeight: 900, color: 'rgba(255,255,255,0.4)' }}>?</span>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Pioche</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{room.deck.length}</div>
+              </div>
             </div>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
-              Pioche: {room.deck.length}
-            </span>
+
+            <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)' }}>{'\u2192'}</span>
+
+            {/* Discard */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {room.discard_pile.length > 0
+                ? <MDCardComponent card={room.discard_pile[room.discard_pile.length - 1]} size="sm" />
+                : (
+                  <div style={{
+                    width: 38, height: 52, borderRadius: 5,
+                    border: '1.5px dashed rgba(255,255,255,0.15)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)' }}>vide</span>
+                  </div>
+                )}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Defausse</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{room.discard_pile.length}</div>
+              </div>
+            </div>
           </div>
 
-          {/* Arrow */}
-          <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)' }}>{'\u2192'}</span>
-
-          {/* Discard */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            {room.discard_pile.length > 0
-              ? <MDCardComponent card={room.discard_pile[room.discard_pile.length - 1]} size="sm" />
-              : (
-                <div style={{
-                  width: 42, height: 58, borderRadius: 6,
-                  border: '1.5px dashed rgba(255,255,255,0.15)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>vide</span>
-                </div>
-              )}
-            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
-              Defausse: {room.discard_pile.length}
-            </span>
-          </div>
-
-          {/* Draw instruction */}
+          {/* Draw instruction — separate row */}
           {isMyTurn && !room.turn_drawn && (
             <div style={{
-              marginLeft: 'auto',
-              padding: '8px 14px', borderRadius: 8,
+              marginTop: 8, padding: '8px 12px', borderRadius: 8,
               background: 'rgba(250,204,21,0.15)', border: '1.5px solid rgba(250,204,21,0.4)',
-              fontSize: 12, fontWeight: 700, color: '#facc15',
+              fontSize: 13, fontWeight: 700, color: '#facc15',
             }}>
-              Pioche 2 cartes pour commencer !
+              Pioche 2 cartes pour commencer ton tour !
             </div>
           )}
-
           {isDiscardMode && (
             <div style={{
-              marginLeft: 'auto',
-              padding: '8px 14px', borderRadius: 8,
+              marginTop: 8, padding: '8px 12px', borderRadius: 8,
               background: 'rgba(248,113,113,0.15)', border: '1.5px solid rgba(248,113,113,0.4)',
-              fontSize: 12, fontWeight: 700, color: '#f87171',
+              fontSize: 13, fontWeight: 700, color: '#f87171',
             }}>
-              Defaussez jusqu'a 7 cartes !
+              Defausse jusqu'a 7 cartes (tu en as {myHand.length}) !
             </div>
           )}
         </div>
@@ -565,7 +569,7 @@ export function MonopolyDealGame({
             border: '2px solid #f59e0b',
             background: 'rgba(245,158,11,0.08)',
           }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', marginBottom: 6 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#fbbf24', marginBottom: 6 }}>
               {pa.actionType === 'birthday' ? 'Anniversaire' :
                pa.actionType === 'debt_collector' ? 'Percepteur' :
                pa.actionType === 'rent' || pa.actionType === 'wild_rent' ? 'Loyer' :
@@ -573,19 +577,19 @@ export function MonopolyDealGame({
               {' '}&mdash; demande par {room.players.find((p) => p.id === pa.actorId)?.name}
             </div>
 
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
               {pa.queue.map((t) => {
                 const payer = room.players.find((p) => p.id === t.playerId);
                 return (
                   <span key={t.playerId} style={{ marginRight: 10 }}>
-                    {payer?.name}: ${t.amount}M
+                    {payer?.name}: <strong style={{ color: 'var(--text-primary)' }}>${t.amount}M</strong>
                   </span>
                 );
               })}
             </div>
 
             {pa.jsnCount > 0 && (
-              <div style={{ fontSize: 12, color: '#a78bfa', marginBottom: 8 }}>
+              <div style={{ fontSize: 13, color: '#a78bfa', marginBottom: 8 }}>
                 Non Merci joue {pa.jsnCount} fois
               </div>
             )}
@@ -595,89 +599,71 @@ export function MonopolyDealGame({
               const owed = task!.amount;
               const bankCards = safeBank(myPlayer);
               const myBankTotal = getBankTotal(myPlayer);
-              // Rule: must give all bank before giving properties
-              const mustGiveAllBank = myBankTotal < owed;
-
-              // Total of all non-complete property cards I could give
-              const availPropCards = ALL_COLORS.flatMap((c) => {
-                const set = safeSet(myPlayer, c);
-                return isSetComplete(c, set) ? [] : set;
-              });
-              const availPropTotal = availPropCards.reduce((s, c) => s + c.value, 0);
-              const totalAvailable = myBankTotal + availPropTotal;
-
-              // Effective total that will be submitted
-              const selectedPropTotal = paymentSelection.reduce((s, c) => s + c.value, 0);
-              const effectiveTotal = mustGiveAllBank
-                ? myBankTotal + selectedPropTotal
-                : paymentSelection.reduce((s, c) => s + c.value, 0);
-
-              // Can submit: paid enough, OR gave everything available
-              const canSubmit = effectiveTotal >= owed || effectiveTotal >= totalAvailable;
 
               // Locked bank cards (mustGiveAllBank): can't deselect, always included
               // Normal bank cards: player selects until >= owed
-              const propSelectable = mustGiveAllBank; // properties only selectable when bank is insufficient
-              const bankSelectable = !mustGiveAllBank;
+              // Properties only selectable once ALL bank cards are given
+              const allBankSelected = bankCards.length === 0 ||
+                bankCards.every((c) => !!paymentSelection.find((s) => s.id === c.id));
 
-              const handleSubmit = () => {
-                const ids = mustGiveAllBank
-                  ? [...bankCards.map((c) => c.id), ...paymentSelection.map((c) => c.id)]
-                  : paymentSelection.map((c) => c.id);
-                onSubmitPayment(ids);
-              };
+              const selectedTotal = paymentSelection.reduce((s, c) => s + c.value, 0);
+
+              const availPropTotal = ALL_COLORS.reduce((sum, c) => {
+                const set = safeSet(myPlayer, c);
+                return isSetComplete(c, set) ? sum : sum + set.reduce((s, card) => s + card.value, 0);
+              }, 0);
+              const totalAvailable = myBankTotal + availPropTotal;
+              const canSubmit = selectedTotal >= owed || selectedTotal >= totalAvailable;
 
               return (
                 <div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
-                    Tu dois payer <strong>${owed}M</strong>.{' '}
-                    {mustGiveAllBank
-                      ? `Ta banque ($${myBankTotal}M) sera donnee en entier. Selectionne des proprietes pour completer.`
-                      : `Selectionne des billets dans ta banque.`}
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 10 }}>
+                    Tu dois payer <strong style={{ color: '#fbbf24' }}>${owed}M</strong>.{' '}
+                    {!allBankSelected
+                      ? 'Selectionne d\'abord tout ton argent.'
+                      : myBankTotal < owed
+                        ? 'Banque insuffisante — selectionne des proprietes.'
+                        : 'Selectionne des billets.'}
                   </div>
 
-                  {/* Bank section */}
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 10, color: '#86efac', fontWeight: 700, marginBottom: 4 }}>
+                  {/* Bank */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: '#86efac', fontWeight: 700, marginBottom: 6 }}>
                       Banque — ${myBankTotal}M
-                      {mustGiveAllBank && (
-                        <span style={{ color: '#f87171', marginLeft: 6 }}>(tout inclus automatiquement)</span>
-                      )}
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {bankCards.map((c) => (
                         <MDCardComponent
-                          key={c.id} card={c} size="sm"
-                          selected={mustGiveAllBank || !!paymentSelection.find((s) => s.id === c.id)}
-                          disabled={mustGiveAllBank}
-                          onClick={bankSelectable ? () => togglePaymentCard(c) : undefined}
+                          key={c.id} card={c} size="md"
+                          selected={!!paymentSelection.find((s) => s.id === c.id)}
+                          onClick={() => togglePaymentCard(c)}
                         />
                       ))}
                       {bankCards.length === 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Banque vide</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Banque vide</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Properties section */}
+                  {/* Properties — locked until all bank selected */}
                   {ALL_COLORS.map((color) => {
                     const cards = safeSet(myPlayer, color);
                     if (!cards.length) return null;
                     const isComplete = isSetComplete(color, cards);
-                    const isLocked = isComplete || !propSelectable;
+                    const locked = isComplete || !allBankSelected;
                     return (
-                      <div key={color} style={{ marginBottom: 4 }}>
-                        <div style={{ fontSize: 10, marginBottom: 2, color: isComplete ? '#f87171' : propSelectable ? 'var(--text-secondary)' : 'var(--text-muted)' }}>
+                      <div key={color} style={{ marginBottom: 8 }}>
+                        <div style={{ fontSize: 12, marginBottom: 4, color: isComplete ? '#f87171' : locked ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
                           {COLOR_LABEL[color]}
-                          {isComplete ? ' (set complet — protege)' : !propSelectable ? ' (banque suffisante — non necessaire)' : ''}
+                          {isComplete ? ' (set complet — protege)' : locked ? ' (donne d\'abord tout ton argent)' : ''}
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                           {cards.map((c) => (
                             <MDCardComponent
-                              key={c.id} card={c} size="sm"
-                              selected={propSelectable && !isComplete && !!paymentSelection.find((s) => s.id === c.id)}
-                              disabled={isLocked}
-                              onClick={isLocked ? undefined : () => togglePaymentCard(c)}
+                              key={c.id} card={c} size="md"
+                              selected={!locked && !!paymentSelection.find((s) => s.id === c.id)}
+                              disabled={locked}
+                              onClick={locked ? undefined : () => togglePaymentCard(c)}
                             />
                           ))}
                         </div>
@@ -685,12 +671,12 @@ export function MonopolyDealGame({
                     );
                   })}
 
-                  {/* Action buttons */}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                     {canJSN && (
                       <button
                         className="btn btn-primary"
-                        style={{ fontSize: 12, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
+                        style={{ fontSize: 13, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
                         onClick={() => {
                           const jsnCard = myHand.find((c) => c.action === 'just_say_no');
                           if (jsnCard) onRespondJSN(jsnCard.id);
@@ -701,19 +687,15 @@ export function MonopolyDealGame({
                     )}
                     <button
                       className="btn btn-primary"
-                      style={{
-                        fontSize: 12,
-                        opacity: canSubmit ? 1 : 0.4,
-                        cursor: canSubmit ? 'pointer' : 'not-allowed',
-                      }}
+                      style={{ fontSize: 13, opacity: canSubmit ? 1 : 0.35, cursor: canSubmit ? 'pointer' : 'not-allowed' }}
                       disabled={!canSubmit}
-                      onClick={canSubmit ? handleSubmit : undefined}
+                      onClick={canSubmit ? () => onSubmitPayment(paymentSelection.map((c) => c.id)) : undefined}
                     >
-                      Payer ({effectiveTotal}M / {owed}M)
+                      Payer ({selectedTotal}M / {owed}M)
                     </button>
                     {!canSubmit && (
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        Selectionne pour atteindre ${owed}M
+                      <span style={{ fontSize: 12, color: '#f87171' }}>
+                        Il manque {owed - selectedTotal}M
                       </span>
                     )}
                   </div>
@@ -761,18 +743,18 @@ export function MonopolyDealGame({
         borderTop: isMyTurn
           ? '2px solid rgba(250,204,21,0.35)'
           : '1.5px solid rgba(255,255,255,0.07)',
-        padding: '8px 12px 10px',
+        padding: '8px 12px 12px',
       }}>
         <div style={{
-          fontSize: 11, fontWeight: 600,
+          fontSize: 13, fontWeight: 600,
           color: isDiscardMode ? '#f87171' : isMyTurn ? '#facc15' : 'var(--text-muted)',
           marginBottom: 6,
         }}>
           {handLabel}
         </div>
-        {/* Two-wrapper pattern: outer scrolls, inner allows hover overflow */}
-        <div style={{ overflowX: 'auto', paddingTop: 14, paddingBottom: 2, marginTop: -14 }}>
-          <div style={{ display: 'flex', gap: 6, paddingTop: 14, paddingBottom: 4 }}>
+        {/* Overflow wrapper: paddingTop gives room for the hover-lift above the scroll boundary */}
+        <div style={{ overflowX: 'auto', overflowY: 'visible', paddingTop: 16 }}>
+          <div style={{ display: 'flex', gap: 7, paddingBottom: 4, minWidth: 'max-content' }}>
             {myHand.map((card) => (
               <MDCardComponent
                 key={card.id}
@@ -789,7 +771,7 @@ export function MonopolyDealGame({
               />
             ))}
             {myHand.length === 0 && (
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: 4 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                 Main vide
               </span>
             )}
