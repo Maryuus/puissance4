@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useUnoGame } from '../../hooks/useUnoGame';
-import { UnoSetupUI } from './UnoSetup';
+import { UnoSetup } from './UnoSetup';
 import { UnoWaiting } from './UnoWaiting';
 import { UnoGame } from './UnoGame';
 
@@ -101,8 +101,7 @@ export function UnoApp({ onGoBack }: UnoAppProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <UnoSetupUI
-              onJoined={() => {/* room state updates automatically */}}
+            <UnoSetup
               onBack={onGoBack}
               createRoom={createRoom}
               joinRoom={joinRoom}
