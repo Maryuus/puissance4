@@ -28,6 +28,7 @@ interface Props {
   onPlayProperty: (card: MDCard, color: PropertyColor) => void;
   onPlayActionAsMoney: (card: MDCard) => void;
   onInitiateAction: (card: MDCard) => void;
+  onCommitPassGo: (card: MDCard) => void;
   onCommitDebt: (card: MDCard, targetId: string | null) => void;
   onCommitRent: (card: MDCard, color: PropertyColor, targetId: string | null, doubleCard: MDCard | null) => void;
   onCommitDealBreaker: (card: MDCard, targetId: string, color: PropertyColor) => void;
@@ -43,11 +44,10 @@ interface Props {
   onLeave: () => void;
 }
 
-// ─── Player sets display ──────────────────────────────────────────────────────
+// ─── PropertySet sub-component ────────────────────────────────────────────────
 
 function PropertySet({
-  color, cards, size = 'sm',
-  onCardClick,
+  color, cards, size = 'sm', onCardClick,
 }: {
   color: PropertyColor;
   cards: MDCard[];
@@ -65,7 +65,7 @@ function PropertySet({
     }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: COLOR_BG[color], marginBottom: 2 }}>
         {COLOR_LABEL[color]} {cards.length}/{SET_SIZES[color]}
-        {complete && ' ✓'}
+        {complete && ' \u2713'}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {cards.map((card) => (
@@ -81,68 +81,190 @@ function PropertySet({
   );
 }
 
-function PlayerArea({
-  player, label, size = 'sm', highlight,
-  onSetCardClick,
+// ─── Compact opponent chip ─────────────────────────────────────────────────────
+
+function OpponentChip({
+  player, isCurrentTurn, onSetCardClick,
 }: {
   player: MDPlayer;
-  label: string;
-  size?: 'sm' | 'md';
-  highlight?: boolean;
+  isCurrentTurn: boolean;
   onSetCardClick?: (card: MDCard, color: PropertyColor, player: MDPlayer) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const sets = safeSets(player);
-  const bank = safeBank(player);
+  const bankTotal = getBankTotal(player);
   const completeSets = countCompleteSets(player);
+  const colorsWithCards = ALL_COLORS.filter((c) => (sets[c]?.length ?? 0) > 0);
 
   return (
-    <div style={{
-      borderRadius: 10,
-      padding: '8px 10px',
-      border: highlight ? '2px solid #facc15' : '1.5px solid rgba(255,255,255,0.1)',
-      background: highlight ? 'rgba(250,204,21,0.06)' : 'rgba(0,0,0,0.2)',
-      minWidth: 0,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{label}</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-          💰 ${getBankTotal(player)}M · {completeSets} sets complets
+    <div
+      style={{
+        flexShrink: 0,
+        borderRadius: 10,
+        padding: '8px 10px',
+        border: isCurrentTurn ? '2px solid #facc15' : '1.5px solid rgba(255,255,255,0.1)',
+        background: isCurrentTurn ? 'rgba(250,204,21,0.07)' : 'rgba(0,0,0,0.25)',
+        minWidth: 140, maxWidth: 220,
+        cursor: 'pointer',
+        transition: 'border-color 0.15s',
+      }}
+      onClick={() => setExpanded((e) => !e)}
+    >
+      {/* Name + win badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        {isCurrentTurn && (
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: '#facc15', flexShrink: 0,
+            boxShadow: '0 0 6px #facc15',
+          }} />
+        )}
+        <span style={{
+          fontSize: 12, fontWeight: 700, color: 'var(--text-primary)',
+          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {player.name}
         </span>
         {completeSets >= 3 && (
-          <span style={{ fontSize: 11, background: '#16a34a', color: 'white', padding: '1px 6px', borderRadius: 10, fontWeight: 700 }}>
-            GAGNE!
+          <span style={{
+            fontSize: 9, background: '#16a34a', color: 'white',
+            padding: '1px 5px', borderRadius: 8, fontWeight: 700,
+          }}>
+            GAGNE
           </span>
         )}
       </div>
-      {/* Bank cards */}
-      {bank.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 6 }}>
-          {bank.map((c) => (
-            <MDCardComponent key={c.id} card={c} size="sm" />
+
+      {/* Stats row */}
+      <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--text-muted)', marginBottom: 5 }}>
+        <span style={{ color: '#86efac', fontWeight: 700 }}>${bankTotal}M</span>
+        <span>{completeSets}/3 sets</span>
+      </div>
+
+      {/* Set color badges */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        {colorsWithCards.map((color) => {
+          const count = sets[color]?.length ?? 0;
+          const total = SET_SIZES[color];
+          const complete = count >= total;
+          return (
+            <div key={color} style={{
+              display: 'flex', alignItems: 'center',
+              background: complete ? COLOR_BG[color] : `${COLOR_BG[color]}55`,
+              borderRadius: 4, padding: '2px 5px',
+              border: complete ? `1px solid ${COLOR_BG[color]}` : '1px solid rgba(255,255,255,0.12)',
+            }}>
+              <span style={{ fontSize: 8, color: 'white', fontWeight: 800 }}>{count}/{total}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Expanded: full sets */}
+      {expanded && colorsWithCards.length > 0 && (
+        <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {colorsWithCards.map((color) => (
+            <PropertySet
+              key={color}
+              color={color}
+              cards={sets[color] ?? []}
+              size="sm"
+              onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c, player) : undefined}
+            />
           ))}
         </div>
       )}
-      {/* Sets */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {ALL_COLORS.filter((color) => (sets[color]?.length ?? 0) > 0).map((color) => (
-          <PropertySet
-            key={color}
-            color={color}
-            cards={sets[color] ?? []}
-            size={size}
-            onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c, player) : undefined}
-          />
-        ))}
-      </div>
     </div>
   );
 }
 
-// ─── Overlay for multi-step plays ─────────────────────────────────────────────
+// ─── My full player area ───────────────────────────────────────────────────────
 
-function Overlay({
-  children, onCancel,
-}: { children: React.ReactNode; onCancel?: () => void }) {
+function MyArea({
+  player, isMyTurn, onSetCardClick,
+}: {
+  player: MDPlayer;
+  isMyTurn: boolean;
+  onSetCardClick?: (card: MDCard, color: PropertyColor) => void;
+}) {
+  const sets = safeSets(player);
+  const bank = safeBank(player);
+  const bankTotal = getBankTotal(player);
+  const completeSets = countCompleteSets(player);
+  const colorsWithCards = ALL_COLORS.filter((c) => (sets[c]?.length ?? 0) > 0);
+
+  return (
+    <div style={{
+      borderRadius: 10, padding: '10px 12px',
+      border: isMyTurn ? '2px solid rgba(250,204,21,0.5)' : '1.5px solid rgba(255,255,255,0.1)',
+      background: isMyTurn ? 'rgba(250,204,21,0.04)' : 'rgba(0,0,0,0.2)',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+          Mes cartes
+        </span>
+        <span style={{ fontSize: 11, color: '#86efac', fontWeight: 600 }}>${bankTotal}M</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{completeSets}/3 sets</span>
+        {completeSets >= 3 && (
+          <span style={{
+            fontSize: 11, background: '#16a34a', color: 'white',
+            padding: '1px 6px', borderRadius: 10, fontWeight: 700,
+          }}>
+            GAGNE !
+          </span>
+        )}
+      </div>
+
+      {/* Bank */}
+      {bank.length > 0 && (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Banque ({bank.length} cartes)
+          </div>
+          {/* Two-wrapper pattern for hover lift */}
+          <div style={{ overflowX: 'auto', paddingTop: 10, paddingBottom: 4 }}>
+            <div style={{ display: 'flex', gap: 4, paddingBottom: 2 }}>
+              {bank.map((c) => <MDCardComponent key={c.id} card={c} size="sm" />)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sets */}
+      {colorsWithCards.length > 0 && (
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            Proprietes ({colorsWithCards.length} couleurs)
+          </div>
+          <div style={{ overflowX: 'auto', paddingTop: 4, paddingBottom: 2 }}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {colorsWithCards.map((color) => (
+                <PropertySet
+                  key={color}
+                  color={color}
+                  cards={sets[color] ?? []}
+                  size="sm"
+                  onCardClick={onSetCardClick ? (card, c) => onSetCardClick(card, c) : undefined}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bank.length === 0 && colorsWithCards.length === 0 && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+          Aucune carte posee
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Overlay wrapper ───────────────────────────────────────────────────────────
+
+function Overlay({ children, onCancel }: { children: React.ReactNode; onCancel?: () => void }) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -183,7 +305,7 @@ export function MonopolyDealGame({
   room, myHand, myPlayerId, isMyTurn, isMyTurnToRespond, hasJSNInHand,
   pendingPlay, setPendingPlay, paymentSelection, setPaymentSelection,
   isDiscardMode,
-  onPlayMoney, onPlayProperty, onPlayActionAsMoney, onInitiateAction,
+  onPlayMoney, onPlayProperty, onPlayActionAsMoney, onInitiateAction, onCommitPassGo,
   onCommitDebt, onCommitRent, onCommitDealBreaker, onCommitSlyDeal, onCommitForcedDeal,
   onRespondJSN, onAcceptCancellation, onSubmitPayment, onMoveWild,
   onEndTurn, onDiscardCard, onSyncYoutubeUrl, onLeave,
@@ -198,12 +320,15 @@ export function MonopolyDealGame({
   const canPlay = isMyTurn && room.turn_drawn && room.cards_played_this_turn < 3 && !pa;
   const cardsLeft = 3 - room.cards_played_this_turn;
 
-  // Handle clicking a card in my hand
+  const task = pa?.queue[0];
+  const isMyPaymentTurn = task?.playerId === myPlayerId && (pa?.jsnCount ?? 0) % 2 === 0;
+  const isMyJSNCounterTurn = pa && (pa.jsnCount ?? 0) % 2 === 1 && pa.actorId === myPlayerId;
+  const canJSN = isMyTurnToRespond && (pa?.jsnCount ?? 0) % 2 === 0 && hasJSNInHand && pa?.queue[0]?.playerId === myPlayerId;
+
+  const winner = room.winner_id ? room.players.find((p) => p.id === room.winner_id) : null;
+
   function handleHandCardClick(card: MDCard) {
-    if (isDiscardMode) {
-      onDiscardCard(card);
-      return;
-    }
+    if (isDiscardMode) { onDiscardCard(card); return; }
     if (!canPlay) return;
     if (card.type === 'money') {
       onPlayMoney(card);
@@ -216,30 +341,27 @@ export function MonopolyDealGame({
         setPendingPlay({ step: 'color_picker', card });
       }
     } else if (card.type === 'action') {
-      if (card.action === 'double_rent') return; // played automatically with rent
-      setPendingPlay({ step: 'action_choice', card });
+      if (card.action === 'double_rent') return;
+      if (card.action === 'pass_go') {
+        onCommitPassGo(card);
+      } else {
+        setPendingPlay({ step: 'action_choice', card });
+      }
     }
   }
 
-  // Handle clicking a card in my sets (for wild move or forced deal)
   function handleMySetCardClick(card: MDCard, color: PropertyColor) {
     if (pendingPlay?.step === 'forced_deal_my') {
-      // Pick my card to give away
-      if (!card.wildColors || !isSetComplete(color, safeSet(myPlayer, color))) {
-        // Can't give away a card from a complete set (rules) — we'll allow any non-complete set card
-        const mySet = safeSet(myPlayer, color);
-        if (isSetComplete(color, mySet)) return; // can't steal from complete set in forced deal
-        setPendingPlay({ step: 'forced_deal_target', card: pendingPlay.card, myCardId: card.id, myColor: color });
-      }
+      const mySet = safeSet(myPlayer, color);
+      if (isSetComplete(color, mySet)) return;
+      setPendingPlay({ step: 'forced_deal_target', card: pendingPlay.card, myCardId: card.id, myColor: color });
     } else if (isMyTurn && !pa) {
-      // Move wild card
       if (card.type === 'wildProperty' || (card.type === 'property' && !card.color)) {
         setMovingWild({ cardId: card.id, fromColor: color });
       }
     }
   }
 
-  // Payment panel: select cards from bank + properties
   function togglePaymentCard(card: MDCard) {
     setPaymentSelection(
       paymentSelection.find((c) => c.id === card.id)
@@ -248,43 +370,46 @@ export function MonopolyDealGame({
     );
   }
 
-  const task = pa?.queue[0];
-  const isMyPaymentTurn = task?.playerId === myPlayerId && (pa?.jsnCount ?? 0) % 2 === 0;
-  const isMyJSNCounterTurn = pa && (pa.jsnCount ?? 0) % 2 === 1 && pa.actorId === myPlayerId;
+  // Hand label
+  const handLabel = isDiscardMode
+    ? `Defaussez jusqu'a 7 cartes (${myHand.length})`
+    : canPlay
+      ? `Main — ${cardsLeft} carte(s) a jouer`
+      : `Main (${myHand.length})`;
 
-  // Determine if myPlayer can JSN (is target and even jsnCount)
-  const canJSN = isMyTurnToRespond && (pa?.jsnCount ?? 0) % 2 === 0 && hasJSNInHand && pa?.queue[0]?.playerId === myPlayerId;
-
-  const winner = room.winner_id ? room.players.find((p) => p.id === room.winner_id) : null;
+  // Status text for header
+  const statusText = room.status === 'finished'
+    ? (winner ? `${winner.name} a gagne !` : 'Fin de partie')
+    : isMyTurn
+      ? room.turn_drawn
+        ? `Ton tour · ${cardsLeft} carte(s) restante(s)`
+        : 'Ton tour — pioche !'
+      : `Tour de ${currentPlayer?.name ?? '?'}`;
 
   return (
     <div style={{
-      minHeight: '100vh',
+      height: '100dvh',
+      display: 'flex', flexDirection: 'column',
+      overflow: 'hidden',
       background: 'var(--bg-primary)',
-      display: 'flex',
-      flexDirection: 'column',
-      maxWidth: 900,
-      margin: '0 auto',
-      padding: '8px',
-      gap: 8,
     }}>
       {/* ── Header ── */}
-      <div className="md-header" style={{
+      <div style={{
+        flexShrink: 0,
         display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 12px', borderRadius: 10,
-        background: 'var(--bg-secondary)', flexWrap: 'wrap',
+        padding: '8px 12px',
+        background: 'var(--bg-secondary)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        flexWrap: 'wrap',
       }}>
-        <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 14 }}>
+        <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 14, letterSpacing: 0.3 }}>
           Monopoly Deal
         </span>
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
-          {room.status === 'finished'
-            ? winner ? `${winner.name} a gagné !` : 'Fin de partie'
-            : isMyTurn
-              ? `Ton tour · ${cardsLeft} carte(s) restante(s)`
-              : `Tour de ${currentPlayer?.name ?? '?'}`}
+        <span style={{ fontSize: 12, color: isMyTurn ? '#facc15' : 'var(--text-muted)', flex: 1, fontWeight: isMyTurn ? 600 : 400 }}>
+          {statusText}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <MusicPlayer inline syncedUrl={room.youtube_url ?? undefined} onUrlChange={onSyncYoutubeUrl} />
           {isMyTurn && !pa && room.turn_drawn && (
             <motion.button
               className="btn btn-primary"
@@ -302,155 +427,212 @@ export function MonopolyDealGame({
         </div>
       </div>
 
-      {/* ── Winner banner ── */}
-      {room.status === 'finished' && winner && (
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          style={{
-            textAlign: 'center', padding: '12px 20px', borderRadius: 12,
-            background: 'linear-gradient(135deg, #16a34a, #15803d)',
-            color: 'white', fontWeight: 900, fontSize: 18,
-          }}
-        >
-          🏆 {winner.name} a gagné avec 3 sets complets !
-          <div style={{ marginTop: 8 }}>
-            <button className="btn btn-ghost" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }} onClick={onLeave}>
-              Retour au menu
-            </button>
+      {/* ── Scrollable content ── */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 8 }}>
+
+        {/* Winner banner */}
+        {room.status === 'finished' && winner && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={{
+              textAlign: 'center', padding: '12px 20px', borderRadius: 12,
+              background: 'linear-gradient(135deg, #16a34a, #15803d)',
+              color: 'white', fontWeight: 900, fontSize: 18,
+            }}
+          >
+            {winner.name} a gagne avec 3 sets complets !
+            <div style={{ marginTop: 8 }}>
+              <button className="btn btn-ghost" style={{ color: 'white', borderColor: 'rgba(255,255,255,0.4)' }} onClick={onLeave}>
+                Retour au menu
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Opponents row (horizontal scroll) */}
+        {otherPlayers.length > 0 && (
+          <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
+            <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
+              {otherPlayers.map((p) => (
+                <OpponentChip
+                  key={p.id}
+                  player={p}
+                  isCurrentTurn={p.id === currentPlayer?.id}
+                />
+              ))}
+            </div>
           </div>
-        </motion.div>
-      )}
-
-      {/* ── Other players ── */}
-      {otherPlayers.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {otherPlayers.map((p) => (
-            <PlayerArea
-              key={p.id}
-              player={p}
-              label={p.name + (p.id === currentPlayer?.id ? ' 🎯' : '')}
-
-              size="sm"
-              highlight={p.id === currentPlayer?.id}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* ── Center info ── */}
-      <div style={{
-        display: 'flex', gap: 10, alignItems: 'center',
-        padding: '8px 12px', borderRadius: 10,
-        background: 'var(--bg-secondary)',
-        flexWrap: 'wrap',
-      }}>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Pioche: <strong style={{ color: 'var(--text-primary)' }}>{room.deck.length}</strong> cartes
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Défausse: <strong style={{ color: 'var(--text-primary)' }}>{room.discard_pile.length}</strong> cartes
-        </div>
-        {room.discard_pile.length > 0 && (
-          <MDCardComponent card={room.discard_pile[room.discard_pile.length - 1]} size="sm" />
         )}
-        {isDiscardMode && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#f87171' }}>
-            Défaussez jusqu'à 7 cartes !
-          </span>
-        )}
-        {/* MusicPlayer */}
-        <div style={{ marginLeft: 'auto' }}>
-          <MusicPlayer
-            inline
-            syncedUrl={room.youtube_url ?? undefined}
-            onUrlChange={onSyncYoutubeUrl}
-          />
-        </div>
-      </div>
 
-      {/* ── Pending action panel (payment / JSN) ── */}
-      {pa && (
+        {/* Center table: deck / discard / draw info */}
         <div style={{
+          display: 'flex', gap: 10, alignItems: 'center',
           padding: '10px 14px', borderRadius: 10,
-          border: '2px solid #f59e0b',
-          background: 'rgba(245,158,11,0.1)',
+          background: 'rgba(0,80,40,0.25)',
+          border: '1.5px solid rgba(0,160,80,0.2)',
+          flexWrap: 'wrap',
         }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', marginBottom: 6 }}>
-            {pa.actionType === 'birthday' ? '🎂 Anniversaire' :
-             pa.actionType === 'debt_collector' ? '💸 Percepteur' :
-             pa.actionType === 'rent' || pa.actionType === 'wild_rent' ? '🏠 Loyer' :
-             'Action en cours'}
-            {' '}— demandé par {room.players.find((p) => p.id === pa.actorId)?.name}
+          {/* Deck */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <div style={{
+              width: 42, height: 58, borderRadius: 6, flexShrink: 0,
+              background: 'repeating-linear-gradient(45deg,#1e3a5f,#1e3a5f 4px,#0f2744 4px,#0f2744 8px)',
+              border: '1.5px solid #334155',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ fontSize: 16, fontWeight: 900, color: 'rgba(255,255,255,0.4)' }}>?</span>
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
+              Pioche: {room.deck.length}
+            </span>
           </div>
 
-          {/* Remaining payers */}
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-            {pa.queue.map((t) => {
-              const payer = room.players.find((p) => p.id === t.playerId);
-              return (
-                <span key={t.playerId} style={{ marginRight: 10 }}>
-                  {payer?.name}: ${t.amount}M
-                </span>
-              );
-            })}
+          {/* Arrow */}
+          <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)' }}>{'\u2192'}</span>
+
+          {/* Discard */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            {room.discard_pile.length > 0
+              ? <MDCardComponent card={room.discard_pile[room.discard_pile.length - 1]} size="sm" />
+              : (
+                <div style={{
+                  width: 42, height: 58, borderRadius: 6,
+                  border: '1.5px dashed rgba(255,255,255,0.15)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>vide</span>
+                </div>
+              )}
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>
+              Defausse: {room.discard_pile.length}
+            </span>
           </div>
 
-          {/* Just Say No status */}
-          {pa.jsnCount > 0 && (
-            <div style={{ fontSize: 12, color: '#a78bfa', marginBottom: 8 }}>
-              Non Merci joué {pa.jsnCount} fois
+          {/* Draw instruction */}
+          {isMyTurn && !room.turn_drawn && (
+            <div style={{
+              marginLeft: 'auto',
+              padding: '8px 14px', borderRadius: 8,
+              background: 'rgba(250,204,21,0.15)', border: '1.5px solid rgba(250,204,21,0.4)',
+              fontSize: 12, fontWeight: 700, color: '#facc15',
+            }}>
+              Pioche 2 cartes pour commencer !
             </div>
           )}
 
-          {/* My turn to pay */}
-          {isMyPaymentTurn && pa.jsnCount % 2 === 0 && (
-            <div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                Tu dois payer ${task!.amount}M. Sélectionne les cartes à payer :
-              </div>
-              {/* My bank cards */}
-              <div style={{ marginBottom: 6 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Banque</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {safeBank(myPlayer).map((c) => (
-                    <MDCardComponent
-                      key={c.id}
-                      card={c}
-                      size="sm"
-                      selected={!!paymentSelection.find((s) => s.id === c.id)}
-                      onClick={() => togglePaymentCard(c)}
-                    />
-                  ))}
-                </div>
-              </div>
-              {/* My property cards */}
-              {ALL_COLORS.map((color) => {
-                const cards = safeSet(myPlayer, color);
-                if (!cards.length) return null;
-                const isComplete = isSetComplete(color, cards);
+          {isDiscardMode && (
+            <div style={{
+              marginLeft: 'auto',
+              padding: '8px 14px', borderRadius: 8,
+              background: 'rgba(248,113,113,0.15)', border: '1.5px solid rgba(248,113,113,0.4)',
+              fontSize: 12, fontWeight: 700, color: '#f87171',
+            }}>
+              Defaussez jusqu'a 7 cartes !
+            </div>
+          )}
+        </div>
+
+        {/* Pending action panel */}
+        {pa && (
+          <div style={{
+            padding: '12px 14px', borderRadius: 10,
+            border: '2px solid #f59e0b',
+            background: 'rgba(245,158,11,0.08)',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#fbbf24', marginBottom: 6 }}>
+              {pa.actionType === 'birthday' ? 'Anniversaire' :
+               pa.actionType === 'debt_collector' ? 'Percepteur' :
+               pa.actionType === 'rent' || pa.actionType === 'wild_rent' ? 'Loyer' :
+               'Action en cours'}
+              {' '}&mdash; demande par {room.players.find((p) => p.id === pa.actorId)?.name}
+            </div>
+
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+              {pa.queue.map((t) => {
+                const payer = room.players.find((p) => p.id === t.playerId);
                 return (
-                  <div key={color} style={{ marginBottom: 4 }}>
-                    <div style={{ fontSize: 10, color: isComplete ? '#f87171' : 'var(--text-muted)', marginBottom: 2 }}>
-                      {COLOR_LABEL[color]}{isComplete ? ' (set complet — non volable)' : ''}
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                      {cards.map((c) => (
-                        <MDCardComponent
-                          key={c.id}
-                          card={c}
-                          size="sm"
-                          selected={!!paymentSelection.find((s) => s.id === c.id)}
-                          disabled={isComplete}
-                          onClick={isComplete ? undefined : () => togglePaymentCard(c)}
-                        />
-                      ))}
-                    </div>
-                  </div>
+                  <span key={t.playerId} style={{ marginRight: 10 }}>
+                    {payer?.name}: ${t.amount}M
+                  </span>
                 );
               })}
-              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                {canJSN && (
+            </div>
+
+            {pa.jsnCount > 0 && (
+              <div style={{ fontSize: 12, color: '#a78bfa', marginBottom: 8 }}>
+                Non Merci joue {pa.jsnCount} fois
+              </div>
+            )}
+
+            {/* My payment turn */}
+            {isMyPaymentTurn && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  Tu dois payer ${task!.amount}M. Selectonne les cartes :
+                </div>
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Banque</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {safeBank(myPlayer).map((c) => (
+                      <MDCardComponent
+                        key={c.id} card={c} size="sm"
+                        selected={!!paymentSelection.find((s) => s.id === c.id)}
+                        onClick={() => togglePaymentCard(c)}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {ALL_COLORS.map((color) => {
+                  const cards = safeSet(myPlayer, color);
+                  if (!cards.length) return null;
+                  const isComplete = isSetComplete(color, cards);
+                  return (
+                    <div key={color} style={{ marginBottom: 4 }}>
+                      <div style={{ fontSize: 10, color: isComplete ? '#f87171' : 'var(--text-muted)', marginBottom: 2 }}>
+                        {COLOR_LABEL[color]}{isComplete ? ' (set complet — protege)' : ''}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                        {cards.map((c) => (
+                          <MDCardComponent
+                            key={c.id} card={c} size="sm"
+                            selected={!!paymentSelection.find((s) => s.id === c.id)}
+                            disabled={isComplete}
+                            onClick={isComplete ? undefined : () => togglePaymentCard(c)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                  {canJSN && (
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: 12, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
+                      onClick={() => {
+                        const jsnCard = myHand.find((c) => c.action === 'just_say_no');
+                        if (jsnCard) onRespondJSN(jsnCard.id);
+                      }}
+                    >
+                      Non Merci !
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 12 }}
+                    onClick={() => onSubmitPayment(paymentSelection.map((c) => c.id))}
+                  >
+                    Payer ({paymentSelection.reduce((s, c) => s + c.value, 0)}M / {task!.amount}M)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Counter-JSN or accept */}
+            {isMyJSNCounterTurn && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {hasJSNInHand && (
                   <button
                     className="btn btn-primary"
                     style={{ fontSize: 12, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
@@ -459,76 +641,67 @@ export function MonopolyDealGame({
                       if (jsnCard) onRespondJSN(jsnCard.id);
                     }}
                   >
-                    Non Merci !
+                    Contre-Non Merci !
                   </button>
                 )}
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: 12 }}
-                  onClick={() => onSubmitPayment(paymentSelection.map((c) => c.id))}
-                >
-                  Payer ({paymentSelection.reduce((s, c) => s + c.value, 0)}M / {task!.amount}M)
+                <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onAcceptCancellation}>
+                  Accepter l'annulation
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          {/* Actor's turn: can counter-JSN or accept cancellation */}
-          {isMyJSNCounterTurn && (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {hasJSNInHand && (
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: 12, background: 'linear-gradient(135deg,#7c3aed,#4c1d95)' }}
-                  onClick={() => {
-                    const jsnCard = myHand.find((c) => c.action === 'just_say_no');
-                    if (jsnCard) onRespondJSN(jsnCard.id);
-                  }}
-                >
-                  Contre-Non Merci !
-                </button>
-              )}
-              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onAcceptCancellation}>
-                Accepter l'annulation
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        {/* My player area */}
+        {myPlayer && (
+          <MyArea
+            player={myPlayer}
+            isMyTurn={isMyTurn}
+            onSetCardClick={(card, color) => handleMySetCardClick(card, color)}
+          />
+        )}
+      </div>
 
-      {/* ── My area ── */}
-      <PlayerArea
-        player={myPlayer}
-        label={`Toi (${myPlayer?.name})`}
-        size="md"
-        highlight={isMyTurn}
-        onSetCardClick={handleMySetCardClick}
-      />
-
-      {/* ── My hand ── */}
+      {/* ── Hand dock (fixed bottom) ── */}
       <div style={{
-        borderRadius: 10, padding: '10px 12px',
+        flexShrink: 0,
         background: 'var(--bg-secondary)',
-        border: isMyTurn ? '2px solid rgba(250,204,21,0.4)' : '1.5px solid rgba(255,255,255,0.06)',
+        borderTop: isMyTurn
+          ? '2px solid rgba(250,204,21,0.35)'
+          : '1.5px solid rgba(255,255,255,0.07)',
+        padding: '8px 12px 10px',
       }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
-          {isDiscardMode
-            ? `Main (${myHand.length} cartes — cliquer pour défausser)`
-            : canPlay
-              ? `Main (${myHand.length} cartes — ${cardsLeft} jeu(x) restant(s))`
-              : `Main (${myHand.length} cartes)`}
+        <div style={{
+          fontSize: 11, fontWeight: 600,
+          color: isDiscardMode ? '#f87171' : isMyTurn ? '#facc15' : 'var(--text-muted)',
+          marginBottom: 6,
+        }}>
+          {handLabel}
         </div>
-        <div className="md-hand-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {myHand.map((card) => (
-            <MDCardComponent
-              key={card.id}
-              card={card}
-              size="md"
-              className="md-card"
-              onClick={() => handleHandCardClick(card)}
-              disabled={!canPlay && !isDiscardMode}
-            />
-          ))}
+        {/* Two-wrapper pattern: outer scrolls, inner allows hover overflow */}
+        <div style={{ overflowX: 'auto', paddingTop: 14, paddingBottom: 2, marginTop: -14 }}>
+          <div style={{ display: 'flex', gap: 6, paddingTop: 14, paddingBottom: 4 }}>
+            {myHand.map((card) => (
+              <MDCardComponent
+                key={card.id}
+                card={card}
+                size="md"
+                onClick={() => handleHandCardClick(card)}
+                disabled={!canPlay && !isDiscardMode}
+                selected={false}
+                setCount={
+                  card.type === 'property' && card.color
+                    ? (safeSet(myPlayer, card.color)?.length ?? 0)
+                    : undefined
+                }
+              />
+            ))}
+            {myHand.length === 0 && (
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', paddingTop: 4 }}>
+                Main vide
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -537,7 +710,7 @@ export function MonopolyDealGame({
         {movingWild && (
           <Overlay onCancel={() => setMovingWild(null)}>
             <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-              Déplacer vers quelle couleur ?
+              Deplacer vers quelle couleur ?
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {ALL_COLORS
@@ -550,10 +723,7 @@ export function MonopolyDealGame({
                       background: COLOR_BG[color], color: 'white',
                       fontWeight: 700, fontSize: 12, border: 'none',
                     }}
-                    onClick={() => {
-                      onMoveWild(movingWild.cardId, movingWild.fromColor, color);
-                      setMovingWild(null);
-                    }}
+                    onClick={() => { onMoveWild(movingWild.cardId, movingWild.fromColor, color); setMovingWild(null); }}
                   >
                     {COLOR_LABEL[color]}
                   </button>
@@ -616,25 +786,19 @@ function PendingPlayOverlay({
   const others = room.players.filter((p) => p.id !== myPlayerId);
   const doubleRentCard = myHand.find((c) => c.action === 'double_rent');
 
-  // Color picker for wild property
   if (pendingPlay.step === 'color_picker') {
     const { card } = pendingPlay;
-    const colors = card.wildColors ?? [];
     return (
       <Overlay onCancel={cancel}>
         <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
           Choisir la couleur pour ce joker
         </h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {colors.map((color) => (
+          {(card.wildColors ?? []).map((color) => (
             <button
               key={color}
-              style={{
-                padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
-                background: COLOR_BG[color], color: 'white',
-                fontWeight: 700, fontSize: 13, border: 'none',
-              }}
-              onClick={() => { onPlayProperty(card, color); }}
+              style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer', background: COLOR_BG[color], color: 'white', fontWeight: 700, fontSize: 13, border: 'none' }}
+              onClick={() => onPlayProperty(card, color)}
             >
               {COLOR_LABEL[color]}
             </button>
@@ -644,30 +808,19 @@ function PendingPlayOverlay({
     );
   }
 
-  // Action choice: play as action or bank as money
   if (pendingPlay.step === 'action_choice') {
     const { card } = pendingPlay;
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
-          {card.name}
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{card.name}</h3>
         <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-          Jouer comme action ou mettre à la banque (${card.value}M) ?
+          Jouer comme action ou mettre a la banque (${card.value}M) ?
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1 }}
-            onClick={() => { onInitiateAction(card); }}
-          >
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => onInitiateAction(card)}>
             Jouer l'action
           </button>
-          <button
-            className="btn btn-ghost"
-            style={{ flex: 1 }}
-            onClick={() => { onPlayActionAsMoney(card); }}
-          >
+          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => onPlayActionAsMoney(card)}>
             Banque (${card.value}M)
           </button>
         </div>
@@ -675,37 +828,26 @@ function PendingPlayOverlay({
     );
   }
 
-  // Rent: choose which color to charge
   if (pendingPlay.step === 'rent_color') {
     const { card } = pendingPlay;
     const myColors = card.action === 'wild_rent'
       ? ALL_COLORS.filter((c) => (safeSets(myPlayer)[c]?.length ?? 0) > 0)
       : (card.rentColors ?? []).filter((c) => (safeSets(myPlayer)[c]?.length ?? 0) > 0);
-
     if (myColors.length === 0) {
       return (
         <Overlay onCancel={cancel}>
-          <p style={{ color: 'var(--text-muted)' }}>
-            Tu n'as aucune propriété des couleurs de cette carte.
-          </p>
+          <p style={{ color: 'var(--text-muted)' }}>Tu n'as aucune propriete des couleurs de cette carte.</p>
         </Overlay>
       );
     }
-
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Choisir la couleur pour le loyer
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Choisir la couleur pour le loyer</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {myColors.map((color) => (
             <button
               key={color}
-              style={{
-                padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
-                background: COLOR_BG[color], color: 'white',
-                fontWeight: 700, fontSize: 13, border: 'none',
-              }}
+              style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer', background: COLOR_BG[color], color: 'white', fontWeight: 700, fontSize: 13, border: 'none' }}
               onClick={() => setPendingPlay({ step: 'rent_double', card, rentColor: color })}
             >
               {COLOR_LABEL[color]}
@@ -716,19 +858,15 @@ function PendingPlayOverlay({
     );
   }
 
-  // Rent double: offer to play double rent
   if (pendingPlay.step === 'rent_double') {
     const { card, rentColor } = pendingPlay;
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Utiliser Double Loyer ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Utiliser Double Loyer ?</h3>
         <div style={{ display: 'flex', gap: 10 }}>
           {doubleRentCard && (
             <button
-              className="btn btn-primary"
-              style={{ flex: 1 }}
+              className="btn btn-primary" style={{ flex: 1 }}
               onClick={() => {
                 if (card.action === 'wild_rent') {
                   setPendingPlay({ step: 'rent_target', card, rentColor, doubleCard: doubleRentCard });
@@ -741,8 +879,7 @@ function PendingPlayOverlay({
             </button>
           )}
           <button
-            className="btn btn-ghost"
-            style={{ flex: 1 }}
+            className="btn btn-ghost" style={{ flex: 1 }}
             onClick={() => {
               if (card.action === 'wild_rent') {
                 setPendingPlay({ step: 'rent_target', card, rentColor, doubleCard: null });
@@ -758,22 +895,14 @@ function PendingPlayOverlay({
     );
   }
 
-  // Wild rent: choose target player
   if (pendingPlay.step === 'rent_target') {
     const { card, rentColor, doubleCard } = pendingPlay;
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Qui doit payer le loyer ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Qui doit payer le loyer ?</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {others.map((p) => (
-            <button
-              key={p.id}
-              className="btn btn-ghost"
-              style={{ textAlign: 'left' }}
-              onClick={() => onCommitRent(card, rentColor, p.id, doubleCard)}
-            >
+            <button key={p.id} className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => onCommitRent(card, rentColor, p.id, doubleCard)}>
               {p.name}
             </button>
           ))}
@@ -782,35 +911,24 @@ function PendingPlayOverlay({
     );
   }
 
-  // Debt target
   if (pendingPlay.step === 'debt_target') {
     const { card } = pendingPlay;
-    const isBirthday = card.action === 'birthday';
-    if (isBirthday) {
+    if (card.action === 'birthday') {
       return (
         <Overlay onCancel={cancel}>
           <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
-            🎂 Anniversaire — tous les joueurs te paient $2M
+            Anniversaire &mdash; tous les joueurs te paient $2M
           </h3>
-          <button className="btn btn-primary w-full" onClick={() => onCommitDebt(card, null)}>
-            Confirmer
-          </button>
+          <button className="btn btn-primary w-full" onClick={() => onCommitDebt(card, null)}>Confirmer</button>
         </Overlay>
       );
     }
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Qui doit payer $5M ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Qui doit payer $5M ?</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {others.map((p) => (
-            <button
-              key={p.id}
-              className="btn btn-ghost"
-              style={{ textAlign: 'left' }}
-              onClick={() => onCommitDebt(card, p.id)}
-            >
+            <button key={p.id} className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => onCommitDebt(card, p.id)}>
               {p.name}
             </button>
           ))}
@@ -819,28 +937,16 @@ function PendingPlayOverlay({
     );
   }
 
-  // Deal breaker: pick target
   if (pendingPlay.step === 'deal_breaker_target') {
     const { card } = pendingPlay;
-    const targets = others.filter((p) =>
-      ALL_COLORS.some((c) => isSetComplete(c, safeSet(p, c)))
-    );
+    const targets = others.filter((p) => ALL_COLORS.some((c) => isSetComplete(c, safeSet(p, c))));
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Voler le set complet de qui ?
-        </h3>
-        {targets.length === 0 && (
-          <p style={{ color: 'var(--text-muted)' }}>Aucun joueur n'a de set complet.</p>
-        )}
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Voler le set complet de qui ?</h3>
+        {targets.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucun joueur n'a de set complet.</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {targets.map((p) => (
-            <button
-              key={p.id}
-              className="btn btn-ghost"
-              style={{ textAlign: 'left' }}
-              onClick={() => setPendingPlay({ step: 'deal_breaker_set', card, targetId: p.id })}
-            >
+            <button key={p.id} className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => setPendingPlay({ step: 'deal_breaker_set', card, targetId: p.id })}>
               {p.name}
             </button>
           ))}
@@ -849,25 +955,18 @@ function PendingPlayOverlay({
     );
   }
 
-  // Deal breaker: pick which set
   if (pendingPlay.step === 'deal_breaker_set') {
     const { card, targetId } = pendingPlay;
     const target = room.players.find((p) => p.id === targetId)!;
     const completeSets = ALL_COLORS.filter((c) => isSetComplete(c, safeSet(target, c)));
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Quel set complet voler à {target.name} ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Quel set complet voler a {target.name} ?</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {completeSets.map((color) => (
             <button
               key={color}
-              style={{
-                padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
-                background: COLOR_BG[color], color: 'white',
-                fontWeight: 700, fontSize: 13, border: 'none',
-              }}
+              style={{ padding: '8px 16px', borderRadius: 8, cursor: 'pointer', background: COLOR_BG[color], color: 'white', fontWeight: 700, fontSize: 13, border: 'none' }}
               onClick={() => onCommitDealBreaker(card, targetId, color)}
             >
               {COLOR_LABEL[color]}
@@ -878,31 +977,18 @@ function PendingPlayOverlay({
     );
   }
 
-  // Sly deal: pick target
   if (pendingPlay.step === 'sly_deal_target') {
     const { card } = pendingPlay;
     const targets = others.filter((p) =>
-      ALL_COLORS.some((c) => {
-        const set = safeSet(p, c);
-        return set.length > 0 && !isSetComplete(c, set);
-      })
+      ALL_COLORS.some((c) => { const set = safeSet(p, c); return set.length > 0 && !isSetComplete(c, set); })
     );
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Voler une propriété de qui ?
-        </h3>
-        {targets.length === 0 && (
-          <p style={{ color: 'var(--text-muted)' }}>Aucun joueur n'a de propriété volable.</p>
-        )}
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Voler une propriete de qui ?</h3>
+        {targets.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucun joueur n'a de propriete volable.</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {targets.map((p) => (
-            <button
-              key={p.id}
-              className="btn btn-ghost"
-              style={{ textAlign: 'left' }}
-              onClick={() => setPendingPlay({ step: 'sly_deal_card', card, targetId: p.id })}
-            >
+            <button key={p.id} className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => setPendingPlay({ step: 'sly_deal_card', card, targetId: p.id })}>
               {p.name}
             </button>
           ))}
@@ -911,26 +997,19 @@ function PendingPlayOverlay({
     );
   }
 
-  // Sly deal: pick which card
   if (pendingPlay.step === 'sly_deal_card') {
     const { card, targetId } = pendingPlay;
     const target = room.players.find((p) => p.id === targetId)!;
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Quelle propriété voler à {target.name} ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Quelle propriete voler a {target.name} ?</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {ALL_COLORS.map((color) => {
             const set = safeSet(target, color);
             if (!set.length || isSetComplete(color, set)) return null;
             return set.map((c) => (
               <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <MDCardComponent
-                  card={c}
-                  size="md"
-                  onClick={() => onCommitSlyDeal(card, targetId, c.id, color)}
-                />
+                <MDCardComponent card={c} size="md" onClick={() => onCommitSlyDeal(card, targetId, c.id, color)} />
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{COLOR_LABEL[color]}</span>
               </div>
             ));
@@ -940,25 +1019,18 @@ function PendingPlayOverlay({
     );
   }
 
-  // Forced deal: pick my card to give
   if (pendingPlay.step === 'forced_deal_my') {
     const { card } = pendingPlay;
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Quelle propriété donner en échange ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Quelle propriete donner en echange ?</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {ALL_COLORS.map((color) => {
             const set = safeSet(myPlayer, color);
             if (!set.length || isSetComplete(color, set)) return null;
             return set.map((c) => (
               <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <MDCardComponent
-                  card={c}
-                  size="md"
-                  onClick={() => setPendingPlay({ step: 'forced_deal_target', card, myCardId: c.id, myColor: color })}
-                />
+                <MDCardComponent card={c} size="md" onClick={() => setPendingPlay({ step: 'forced_deal_target', card, myCardId: c.id, myColor: color })} />
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{COLOR_LABEL[color]}</span>
               </div>
             ));
@@ -968,31 +1040,18 @@ function PendingPlayOverlay({
     );
   }
 
-  // Forced deal: pick target player
   if (pendingPlay.step === 'forced_deal_target') {
     const { card, myCardId, myColor } = pendingPlay;
     const targets = others.filter((p) =>
-      ALL_COLORS.some((c) => {
-        const set = safeSet(p, c);
-        return set.length > 0 && !isSetComplete(c, set);
-      })
+      ALL_COLORS.some((c) => { const set = safeSet(p, c); return set.length > 0 && !isSetComplete(c, set); })
     );
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Échanger avec qui ?
-        </h3>
-        {targets.length === 0 && (
-          <p style={{ color: 'var(--text-muted)' }}>Aucun joueur n'a de propriété échangeable.</p>
-        )}
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Echanger avec qui ?</h3>
+        {targets.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucun joueur n'a de propriete echangeable.</p>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {targets.map((p) => (
-            <button
-              key={p.id}
-              className="btn btn-ghost"
-              style={{ textAlign: 'left' }}
-              onClick={() => setPendingPlay({ step: 'forced_deal_their', card, myCardId, myColor, targetId: p.id })}
-            >
+            <button key={p.id} className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => setPendingPlay({ step: 'forced_deal_their', card, myCardId, myColor, targetId: p.id })}>
               {p.name}
             </button>
           ))}
@@ -1001,26 +1060,19 @@ function PendingPlayOverlay({
     );
   }
 
-  // Forced deal: pick their card
   if (pendingPlay.step === 'forced_deal_their') {
     const { card, myCardId, myColor, targetId } = pendingPlay;
     const target = room.players.find((p) => p.id === targetId)!;
     return (
       <Overlay onCancel={cancel}>
-        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
-          Quelle propriété de {target.name} prendre ?
-        </h3>
+        <h3 style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>Quelle propriete de {target.name} prendre ?</h3>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {ALL_COLORS.map((color) => {
             const set = safeSet(target, color);
             if (!set.length || isSetComplete(color, set)) return null;
             return set.map((c) => (
               <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <MDCardComponent
-                  card={c}
-                  size="md"
-                  onClick={() => onCommitForcedDeal(card, myCardId, myColor, targetId, c.id, color)}
-                />
+                <MDCardComponent card={c} size="md" onClick={() => onCommitForcedDeal(card, myCardId, myColor, targetId, c.id, color)} />
                 <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>{COLOR_LABEL[color]}</span>
               </div>
             ));

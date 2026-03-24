@@ -16,7 +16,7 @@ export function MonopolyDealApp({ onGoBack }: Props) {
     paymentSelection, setPaymentSelection,
     isDiscardMode,
     createRoom, joinRoom, startGame, leaveRoom,
-    playMoney, playProperty, initiateAction,
+    playMoney, playProperty, initiateAction, commitPassGo,
     commitDebt, commitRent, commitDealBreaker, commitSlyDeal, commitForcedDeal,
     respondJSN, acceptCancellation,
     submitPayment, moveWild,
@@ -45,6 +45,7 @@ export function MonopolyDealApp({ onGoBack }: Props) {
         onPlayProperty={playProperty}
         onPlayActionAsMoney={playMoney}
         onInitiateAction={initiateAction}
+        onCommitPassGo={commitPassGo}
         onCommitDebt={commitDebt}
         onCommitRent={commitRent}
         onCommitDealBreaker={commitDealBreaker}

@@ -100,10 +100,10 @@ export function Hub({ onSelectGame }: HubProps) {
         {/* Available games */}
         <motion.div className="mode-grid" variants={itemVariants}>
           {games.map((game, index) => (
-            <motion.button
+            <motion.div
               key={game.id}
               className="hub-game-card"
-              style={{ borderLeftColor: game.accent }}
+              style={{ borderLeftColor: game.accent, cursor: 'pointer', position: 'relative' }}
               onClick={() => onSelectGame(game.id)}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -116,8 +116,29 @@ export function Hub({ onSelectGame }: HubProps) {
                 <span className="hub-game-name">{game.name}</span>
                 <span className="hub-game-desc">{game.description}</span>
               </div>
-              <span className="hub-game-arrow">→</span>
-            </motion.button>
+              {game.id === 'monopolydeal' ? (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowMDRules(true); }}
+                  title="Regles du jeu"
+                  style={{
+                    background: 'rgba(34,197,94,0.15)',
+                    border: '1px solid rgba(34,197,94,0.35)',
+                    color: '#22c55e',
+                    borderRadius: 6,
+                    padding: '3px 8px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    lineHeight: 1,
+                  }}
+                >
+                  Regles
+                </button>
+              ) : (
+                <span className="hub-game-arrow">→</span>
+              )}
+            </motion.div>
           ))}
 
           {/* Coming soon */}
@@ -140,23 +161,6 @@ export function Hub({ onSelectGame }: HubProps) {
               </span>
             </div>
           ))}
-        </motion.div>
-
-        <motion.div variants={itemVariants} style={{ textAlign: 'center' }}>
-          <button
-            onClick={() => setShowMDRules(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#22c55e',
-              fontSize: 12,
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              padding: '2px 8px',
-            }}
-          >
-            📋 Règles du Monopoly Deal
-          </button>
         </motion.div>
 
         <motion.p className="menu-footer" variants={itemVariants}>
