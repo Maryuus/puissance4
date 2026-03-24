@@ -549,7 +549,7 @@ export function useMonopolyDealGame() {
 
   const moveWild = useCallback(async (cardId: string, fromColor: PropertyColor, toColor: PropertyColor) => {
     const r = roomRef.current;
-    if (!r) return;
+    if (!r || !canPlay(r)) return;
     const me = r.players.find((p) => p.id === myPlayerId);
     if (!me) return;
 
@@ -558,7 +558,7 @@ export function useMonopolyDealGame() {
 
     const updatedMe = addToSet(newMe, card, toColor);
     const players = updatePlayer(r.players, myPlayerId, () => updatedMe);
-    await updateMDRoom(r.room_code, { players });
+    await updateMDRoom(r.room_code, { players, cards_played_this_turn: r.cards_played_this_turn + 1 });
   }, [myPlayerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── End turn ──────────────────────────────────────────────────────────────

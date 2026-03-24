@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  MDCard, PropertyColor, COLOR_BG, COLOR_LABEL, SET_SIZES,
+  MDCard, PropertyColor, COLOR_BG, COLOR_LABEL, SET_SIZES, RENT,
   ACTION_DESCRIPTIONS,
 } from '../../lib/monopolyDealLogic';
 
@@ -48,7 +48,7 @@ function ColorStrip({ color, height = 18 }: { color: PropertyColor; height?: num
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export function MDCardComponent({
-  card, onClick, selected, disabled, size = 'md', faceDown, className = '', setCount,
+  card, onClick, selected, disabled, size = 'md', faceDown, className = '',
 }: MDCardProps) {
   const [showTip, setShowTip] = useState(false);
   const [tipPos, setTipPos] = useState({ x: 0, y: 0 });
@@ -125,10 +125,9 @@ export function MDCardComponent({
   // ── Propriété ────────────────────────────────────────────────────────────────
 
   if (card.type === 'property' && card.color) {
-    const hasSetInfo = setCount !== undefined;
     const total = SET_SIZES[card.color];
-    const current = setCount ?? 0;
-    const isFull = current >= total;
+    const rentChart = RENT[card.color].slice(1); // skip index 0 (0 cards = $0)
+    const rentFs = Math.max(6, fs - 3);
     return (
       <motion.div
         className={`md-card ${className}`}
@@ -138,27 +137,29 @@ export function MDCardComponent({
         onClick={handleClick}
       >
         <ColorStrip color={card.color} height={size === 'sm' ? 14 : 20} />
-        {/* Badge set progress */}
-        {hasSetInfo && (
-          <div style={{
-            position: 'absolute', top: size === 'sm' ? 16 : 22, right: 3,
-            background: isFull ? '#16a34a' : 'rgba(0,0,0,0.55)',
-            color: 'white', fontSize: 7, fontWeight: 800,
-            padding: '1px 4px', borderRadius: 4, lineHeight: 1.4,
-            border: isFull ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.2)',
-          }}>
-            {current}/{total}
-          </div>
-        )}
-        <div style={{ flex: 1, padding: '3px 4px 3px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: fs - 1, color: '#1e293b', fontWeight: 700, lineHeight: 1.2, wordBreak: 'break-word' }}>
+        <div style={{ flex: 1, padding: '3px 4px 2px', display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {/* Name */}
+          <div style={{ fontSize: fs - 1, color: '#1e293b', fontWeight: 700, lineHeight: 1.15, wordBreak: 'break-word' }}>
             {card.name}
           </div>
+          {/* Rent schedule */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 1 }}>
+            {rentChart.map((amount, idx) => (
+              <div key={idx} style={{
+                display: 'flex', justifyContent: 'space-between',
+                fontSize: rentFs, lineHeight: 1.3,
+              }}>
+                <span style={{ color: '#94a3b8', fontWeight: 600 }}>{idx + 1}{idx + 1 === total ? '\u2605' : ''}</span>
+                <span style={{ color: COLOR_BG[card.color!], fontWeight: 800 }}>${amount}M</span>
+              </div>
+            ))}
+          </div>
+          {/* Bottom: value + set size */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontSize: fs + 2, color: COLOR_BG[card.color], fontWeight: 900 }}>
+            <div style={{ fontSize: fs + 1, color: COLOR_BG[card.color], fontWeight: 900 }}>
               ${card.value}M
             </div>
-            <div style={{ fontSize: 7, color: '#64748b', fontWeight: 600 }}>
+            <div style={{ fontSize: Math.max(7, fs - 2), color: '#64748b', fontWeight: 600 }}>
               set&nbsp;{total}
             </div>
           </div>

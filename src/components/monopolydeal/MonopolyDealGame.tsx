@@ -335,7 +335,7 @@ export function MonopolyDealGame({
   onRespondJSN, onAcceptCancellation, onSubmitPayment, onMoveWild,
   onEndTurn, onDiscardCard, onSyncYoutubeUrl, onLeave,
 }: Props) {
-  const [movingWild, setMovingWild] = useState<{ cardId: string; fromColor: PropertyColor } | null>(null);
+  const [movingWild, setMovingWild] = useState<{ cardId: string; fromColor: PropertyColor; validColors: PropertyColor[] } | null>(null);
 
   const myPlayer = room.players.find((p) => p.id === myPlayerId)!;
   const otherPlayers = room.players.filter((p) => p.id !== myPlayerId);
@@ -380,9 +380,10 @@ export function MonopolyDealGame({
       const mySet = safeSet(myPlayer, color);
       if (isSetComplete(color, mySet)) return;
       setPendingPlay({ step: 'forced_deal_target', card: pendingPlay.card, myCardId: card.id, myColor: color });
-    } else if (isMyTurn && !pa) {
-      if (card.type === 'wildProperty' || (card.type === 'property' && !card.color)) {
-        setMovingWild({ cardId: card.id, fromColor: color });
+    } else if (canPlay) {
+      // Moving a wild costs a card play (only when it's your turn with plays left)
+      if (card.type === 'wildProperty') {
+        setMovingWild({ cardId: card.id, fromColor: color, validColors: card.wildColors ?? [] });
       }
     }
   }
@@ -458,6 +459,26 @@ export function MonopolyDealGame({
         </div>
       </div>
 
+      {/* ── Opponents row — always visible, outside scroll ── */}
+      {otherPlayers.length > 0 && (
+        <div style={{
+          flexShrink: 0,
+          overflowX: 'auto',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          padding: '8px 8px 0',
+        }}>
+          <div style={{ display: 'flex', gap: 8, paddingBottom: 8, minWidth: 'max-content' }}>
+            {otherPlayers.map((p) => (
+              <OpponentChip
+                key={p.id}
+                player={p}
+                isCurrentTurn={p.id === currentPlayer?.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Scrollable content ── */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 8 }}>
 
@@ -479,21 +500,6 @@ export function MonopolyDealGame({
               </button>
             </div>
           </motion.div>
-        )}
-
-        {/* Opponents row (horizontal scroll) */}
-        {otherPlayers.length > 0 && (
-          <div style={{ overflowX: 'auto', paddingBottom: 4 }}>
-            <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
-              {otherPlayers.map((p) => (
-                <OpponentChip
-                  key={p.id}
-                  player={p}
-                  isCurrentTurn={p.id === currentPlayer?.id}
-                />
-              ))}
-            </div>
-          </div>
         )}
 
         {/* Center table: deck / discard / draw info */}
@@ -787,7 +793,7 @@ export function MonopolyDealGame({
               Deplacer vers quelle couleur ?
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {ALL_COLORS
+              {(movingWild.validColors.length > 0 ? movingWild.validColors : ALL_COLORS)
                 .filter((c) => c !== movingWild.fromColor)
                 .map((color) => (
                   <button
