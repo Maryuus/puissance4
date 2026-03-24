@@ -405,7 +405,7 @@ export function MonopolyDealGame({
   const handLabel = isDiscardMode
     ? `Defaussez jusqu'a 7 cartes (${myHand.length})`
     : isMyTurn && room.turn_drawn
-      ? `Main (${myHand.length}) — encore ${cardsLeft} a jouer`
+      ? `Main (${myHand.length}) — ${cardsLeft} carte${cardsLeft > 1 ? 's' : ''} restante${cardsLeft > 1 ? 's' : ''}`
       : `Main (${myHand.length})`;
 
   // Status text for header
@@ -413,7 +413,7 @@ export function MonopolyDealGame({
     ? (winner ? `${winner.name} a gagne !` : 'Fin de partie')
     : isMyTurn
       ? room.turn_drawn
-        ? `Ton tour · ${cardsLeft} carte(s) restante(s)`
+        ? 'Ton tour'
         : 'Ton tour — pioche !'
       : `Tour de ${currentPlayer?.name ?? '?'}`;
 
