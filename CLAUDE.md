@@ -4,9 +4,10 @@
 
 Application web de mini-jeux multijoueur. Initialement "Puissance 4", renommée **MiniJeux**.
 
-- **Live:** https://maryuus-minijeux.vercel.app (alias), https://puissance4-lake.vercel.app
+- **Live:** https://maryuus-minijeux.vercel.app (alias principal), https://puissance4-lake.vercel.app
 - **GitHub:** https://github.com/Maryuus/puissance4
 - **Vercel project:** maryuus-projects/puissance4
+- **Version courante :** voir `package.json` → `"version"` — affichee dans le footer du Hub
 
 ---
 
@@ -38,6 +39,8 @@ src/main.tsx → <AppShell />
 
 Pas de router. `AppShell` maintient un state local `'hub' | 'puissance4' | 'uno' | 'monopolydeal'` et switche entre les jeux via `<AnimatePresence>`.
 
+Les jeux sont enregistres dans `GAME_COMPONENTS` (Record<GameId, ComponentType>). Pour ajouter un jeu : (1) importer le composant App, (2) l'ajouter dans `GAME_COMPONENTS`, (3) ajouter le type dans `GameId`, (4) ajouter la carte dans `Hub.tsx`.
+
 **Attention — piege critique :** AppShell wrape chaque jeu dans un `motion.div` avec animation d'opacite. Cela cree un stacking/transform context qui **casse `position: fixed`** pour les enfants. Tout composant necessitant un positionnement fixe (ex: MusicPlayer) doit utiliser le prop `inline` pour se positionner relativement.
 
 ### Hub (`src/components/Hub.tsx`)
@@ -46,7 +49,33 @@ Page d'accueil. Deux arrays :
 - `games` — jeux disponibles (Puissance 4, UNO, Monopoly Deal)
 - `comingSoon` — jeux a venir (vide actuellement)
 
-Pour ajouter un jeu : (1) ajouter dans `games`, (2) ajouter le type dans `AppShell`, (3) creer le composant App correspondant.
+Affiche la version du site (`__APP_VERSION__` injecte par Vite depuis `package.json`) dans le footer.
+
+---
+
+## Composants partagés (`src/components/shared/`)
+
+Ces composants sont generiques et reutilisables par tous les jeux en ligne.
+
+### `RoomSetup.tsx`
+
+Ecran de creation / rejoindre une room. Props :
+- `emoji`, `title`, `subtitle` — identite visuelle du jeu
+- `codeLength` — longueur du code room (4 pour UNO, 6 pour Monopoly Deal)
+- `isConfigured` — si Supabase est configure (sinon affiche un message d'erreur)
+- `createRoom(name)`, `joinRoom(code, name)`, `loading`, `error`, `onBack`
+
+Gere : onglets Creer/Rejoindre, saisie du prenom (avec persistance via `playerName.ts`), affichage du code genere, copie presse-papier, validation.
+
+### `RoomWaiting.tsx`
+
+Salle d'attente. Props :
+- `emoji`, `roomCode`, `players[]`, `hostId`, `myPlayerId`, `maxPlayers`
+- `loading`, `onStart`, `onLeave`
+
+Gere : liste des joueurs avec avatar colore, badge Hote, bouton Lancer (host uniquement), animation d'attente (guests).
+
+**Pour ajouter un nouveau jeu en ligne :** utiliser ces deux composants comme wrappers — voir `UnoSetup.tsx` et `UnoWaiting.tsx` pour des exemples minimaux.
 
 ---
 
@@ -86,6 +115,8 @@ Online uniquement, 2-10 joueurs.
 - `src/lib/unoSupabase.ts` — CRUD Supabase, realtime
 - `src/hooks/useUnoGame.ts` — toute la logique de jeu
 - `src/components/uno/UnoApp.tsx` — routing Setup / Waiting / Game
+- `src/components/uno/UnoSetup.tsx` — wrapper de `RoomSetup` (emoji 🃏, code 4 chars)
+- `src/components/uno/UnoWaiting.tsx` — wrapper de `RoomWaiting` (max 10 joueurs)
 - `src/components/uno/UnoGame.tsx` — plateau de jeu
 - `src/components/uno/UnoCardComponent.tsx` — rendu des cartes
 
@@ -109,24 +140,38 @@ Online uniquement, 2-10 joueurs.
 Online uniquement, 2-5 joueurs.
 
 **Fichiers :**
-- `src/lib/monopolyDealLogic.ts` — types, constantes (SET_SIZES, RENT_CHART, COLOR_BG), deck (96 cartes), helpers
+- `src/lib/monopolyDealLogic.ts` — types, constantes (SET_SIZES, RENT, COLOR_BG), deck (96 cartes), helpers
 - `src/lib/monopolyDealSupabase.ts` — CRUD Supabase, realtime
 - `src/hooks/useMonopolyDealGame.ts` — logique de jeu
 - `src/components/monopolydeal/MonopolyDealApp.tsx` — routing
-- `src/components/monopolydeal/MonopolyDealGame.tsx` — plateau
+- `src/components/monopolydeal/MonopolyDealSetup.tsx` — wrapper de `RoomSetup` (emoji 🎩, code 6 chars)
+- `src/components/monopolydeal/MonopolyDealWaiting.tsx` — wrapper de `RoomWaiting` (max 5 joueurs)
+- `src/components/monopolydeal/MonopolyDealGame.tsx` — plateau (layout 100dvh, flex column)
 - `src/components/monopolydeal/MDCardComponent.tsx` — rendu cartes (money/property/wildProperty/action)
 
-**Types de cartes :** money, property, wildProperty (wildColors[], isRainbow), action (ActionType)
+**Types de cartes :** money, property, wildProperty (wildColors[]), action (ActionType)
 
 **Regles implementees :**
 - Piocher 2 (ou 5 si main vide), jouer jusqu'a 3 cartes par tour
 - Defausser a 7 en fin de tour
-- Victoire : 3 sets complets
+- Victoire : 3 sets complets — bouton Rejouer pour l'hote
 - Just Say No chainable (jsnCount dans pending_action)
-- Paiement : banque (argent) + proprietes, tout si insolvable
-- Wild cards reposables librement pendant son tour
+- JSN disponible aussi contre Sly Deal et Deal Breaker (type steal/steal_set)
+- Paiement : banque d'abord, puis proprietes (sets complets inclus), tout si insolvable
+- Wild cards repositionnables librement pendant son tour (coute 1 carte jouee)
+- Double Loyer : dialog uniquement si la carte est en main
 
-**Pending action system :** `pending_action.jsnCount` — pair = la cible peut JSN ou payer, impair = l'acteur peut contre-JSN
+**Pending action system :**
+- `type: 'payment'` — file de paiement (loyer, anniversaire, percepteur)
+  - `queue[]` : liste des payeurs restants
+  - `jsnCount` pair = la cible peut JSN ou payer ; impair = l'acteur peut contre-JSN
+  - `acceptCancellation` saute uniquement le joueur JSN (pas toute la file)
+- `type: 'steal'` — vol simple (Sly Deal)
+  - `targetId`, `targetColor`, `targetCardId`
+  - La cible peut JSN ou accepter ; l'acteur confirme avec `confirmSteal`
+- `type: 'steal_set'` — vol de set (Deal Breaker)
+  - `targetId`, `targetColor`
+  - Meme mecanique JSN que steal
 
 **Tables Supabase :**
 - `monopoly_deal_rooms` : room_code, status, host_id, players (JSONB), current_player_index, deck, discard_pile, cards_played_this_turn, turn_drawn, pending_action (JSONB|null), winner_id, youtube_url
@@ -142,7 +187,7 @@ Lecteur YouTube flottant presente dans Puissance 4 et UNO.
 
 **Deux modes :**
 - `inline={false}` (defaut) : `position: fixed; bottom: 1.25rem; right: 1.25rem` — Puissance 4
-- `inline={true}` : `position: relative` — UNO (dans le header, evite le piege motion.div)
+- `inline={true}` : `position: relative` — UNO et Monopoly Deal (dans le header, evite le piege motion.div)
 
 **YouTube IFrame API** (pas un simple `<iframe>`) : permet d'appeler `playVideo()` explicitement, necessaire pour iOS Safari qui bloque l'autoplay iframe.
 
@@ -152,10 +197,23 @@ Lecteur YouTube flottant presente dans Puissance 4 et UNO.
 
 ---
 
-## Utilitaires partages
+## Utilitaires partages (`src/lib/`)
 
-- `src/lib/playerName.ts` — `getSavedName()` / `saveName(name)` — localStorage key `'player-name'`, utilise dans UnoSetup, PlayerSetup (P4), OnlineSetup (P4)
-- `src/lib/supabase.ts` — client Supabase unique, verifie `isSupabaseConfigured` (env vars valides)
+- `utils.ts` — `shuffleDeck<T>()`, `generateRoomCode(length)`, `createPlayerId(storageKey)` — utilises par tous les jeux
+- `playerName.ts` — `getSavedName()` / `saveName(name)` — localStorage key `'player-name'`
+- `supabase.ts` — client Supabase unique, verifie `isSupabaseConfigured` (env vars valides)
+
+---
+
+## Versioning
+
+La version est dans `package.json` → `"version"` et affichee dans le Hub footer via `__APP_VERSION__` (injecte par `vite.config.ts`).
+
+Convention :
+- Nouveau jeu : incrémenter le chiffre entier (ex: `3` → `4`)
+- Bug fix / feature : incrémenter le decimal (ex: `3.1` → `3.2`)
+
+Toujours bumper la version avant de deployer pour pouvoir verifier que le bon build est en ligne.
 
 ---
 
@@ -167,17 +225,19 @@ CSS variables dans `src/index.css` :
 
 Variables principales : `--bg-primary`, `--bg-secondary`, `--bg-card`, `--text-primary`, `--text-secondary`, `--text-muted`, `--border-color`, `--glass-bg`, `--glass-border`, `--p1-color`, `--p2-color`, `--btn-primary`
 
-**Regle absolue : ne jamais hardcoder une couleur sombre.** Utiliser uniquement les CSS variables. Ajouter un override `.light` si besoin. Hardcoder une couleur casse le light mode.
+**Regle absolue : ne jamais hardcoder une couleur sombre.** Utiliser uniquement les CSS variables. Ajouter un override `.light` si besoin.
 
 ---
 
 ## Pieges CSS connus
 
-1. **`overflow-x: auto` force `overflow-y: auto`** : clip les stacks de cartes et les hover scale-ups. Fix : pattern deux wrappers (outer scroll div + inner flex row avec padding-top pour l'espace de debordement).
+1. **`overflow-x: auto` force `overflow-y: auto`** : clip les stacks de cartes et les hover scale-ups. Fix : pattern deux wrappers (outer scroll div + inner flex row avec `paddingTop` pour l'espace de debordement).
 
 2. **`backdrop-filter` cree un stacking context** : les elements internes ne peuvent pas remonter au-dessus des siblings DOM suivants. Fix : `position: relative; z-index: N` sur l'element.
 
 3. **`position: fixed` dans un `motion.div` avec animation opacite** : peut se casser. Fix : utiliser le prop `inline` sur MusicPlayer.
+
+4. **Service worker PWA** : les deployments ne se mettent pas toujours a jour automatiquement. `skipWaiting: true` et `clientsClaim: true` sont configures dans `vite.config.ts`. Si un bug visuel persiste, verifier la version affichee dans le Hub — si elle est ancienne, vider le cache navigateur.
 
 ---
 
@@ -187,6 +247,8 @@ Variables principales : `--bg-primary`, `--bg-secondary`, `--bg-card`, `--text-p
 
 Deploy manuel :
 ```bash
+# Bumper la version dans package.json, puis :
+git add -A && git commit -m "..." && git push
 npx vercel --prod
 npx vercel alias set [deployment-url] maryuus-minijeux.vercel.app
 ```
@@ -207,8 +269,9 @@ VITE_SUPABASE_ANON_KEY=...
 
 ## Workflow
 
-- Apres chaque changement significatif : `git add -A && git commit -m "..." && git push && npx vercel --prod`, puis re-appliquer l'alias.
+- Apres chaque changement significatif : commit + push + `npx vercel --prod` + re-appliquer l'alias.
 - Pas besoin de demander la permission pour les commits, pushes, deploys Vercel, ou migrations SQL.
+- Bumper la version dans `package.json` a chaque deploy pour faciliter le debug.
 
 ---
 
@@ -217,13 +280,21 @@ VITE_SUPABASE_ANON_KEY=...
 ```
 src/
   main.tsx                          # Point d'entree
-  AppShell.tsx                      # Routing inter-jeux
+  AppShell.tsx                      # Routing inter-jeux + registre GAME_COMPONENTS
   index.css                         # CSS variables + styles globaux
-  vite-env.d.ts
+  vite-env.d.ts                     # Types env + __APP_VERSION__
 
   components/
-    Hub.tsx                         # Landing page
-    App.tsx                         # Puissance 4 (screens + GameScreen)
+    Hub.tsx                         # Landing page (liste jeux + version)
+    ThemeToggle.tsx                 # Toggle dark/light
+    MusicPlayer.tsx                 # Lecteur YouTube (inline ou fixed)
+    ErrorBoundary.tsx               # Fallback erreur global
+
+    shared/                         # Composants reutilisables par tous les jeux
+      RoomSetup.tsx                 # Ecran create/join room (generique)
+      RoomWaiting.tsx               # Salle d'attente (generique)
+
+    App.tsx                         # Puissance 4 — screens + GameScreen
     MainMenu.tsx                    # Menu P4
     PlayerSetup.tsx                 # Setup joueurs P4
     DifficultyPicker.tsx            # Choix difficulte IA
@@ -234,41 +305,40 @@ src/
     ScorePanel.tsx                  # Scores P4
     GameControls.tsx                # Boutons P4
     WinBanner.tsx                   # Banner victoire P4
-    ThemeToggle.tsx                 # Toggle dark/light
-    MusicPlayer.tsx                 # Lecteur YouTube
 
     uno/
-      UnoApp.tsx
-      UnoSetup.tsx
-      UnoWaiting.tsx
-      UnoGame.tsx
-      UnoCardComponent.tsx
-      UnoColorPicker.tsx
+      UnoApp.tsx                    # Routing Setup / Waiting / Game
+      UnoSetup.tsx                  # Wrapper RoomSetup (🃏, code 4 chars)
+      UnoWaiting.tsx                # Wrapper RoomWaiting (max 10)
+      UnoGame.tsx                   # Plateau de jeu
+      UnoCardComponent.tsx          # Rendu des cartes
+      UnoColorPicker.tsx            # Picker couleur wild
 
     monopolydeal/
-      MonopolyDealApp.tsx
-      MonopolyDealSetup.tsx
-      MonopolyDealWaiting.tsx
-      MonopolyDealGame.tsx
-      MDCardComponent.tsx
+      MonopolyDealApp.tsx           # Routing Setup / Waiting / Game
+      MonopolyDealSetup.tsx         # Wrapper RoomSetup (🎩, code 6 chars)
+      MonopolyDealWaiting.tsx       # Wrapper RoomWaiting (max 5)
+      MonopolyDealGame.tsx          # Plateau (100dvh, flex column, hand dock)
+      MDCardComponent.tsx           # Rendu cartes + tooltip action
 
   hooks/
-    useGame.ts                      # Hook P4 (logique locale)
+    useGame.ts                      # Hook P4 logique locale
     useAI.ts                        # Hook IA P4
     useOnlineGame.ts                # Hook online P4
     useUnoGame.ts                   # Hook UNO (tout)
     useMonopolyDealGame.ts          # Hook Monopoly Deal (tout)
 
   lib/
+    utils.ts                        # shuffleDeck, generateRoomCode, createPlayerId
+    playerName.ts                   # Persistance prenom joueur (localStorage)
+    supabase.ts                     # Client Supabase + CRUD P4
     gameLogic.ts                    # Logique P4 pure
     minimax.ts                      # IA minimax P4
-    sounds.ts                       # Sons Web Audio
-    supabase.ts                     # Client Supabase + CRUD P4
+    sounds.ts                       # Sons Web Audio API
     unoLogic.ts                     # Logique UNO pure
-    unoSupabase.ts                  # CRUD UNO
+    unoSupabase.ts                  # CRUD + realtime UNO
     monopolyDealLogic.ts            # Logique Monopoly Deal pure
-    monopolyDealSupabase.ts         # CRUD Monopoly Deal
-    playerName.ts                   # Persistance nom joueur
+    monopolyDealSupabase.ts         # CRUD + realtime Monopoly Deal
 
   store/
     gameStore.ts                    # Zustand store P4
