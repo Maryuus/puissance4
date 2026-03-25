@@ -28,7 +28,7 @@ function GameScreen() {
   } = useGameStore();
 
   useAI();
-  const { handleOnlineRematch, handleYoutubeSync } = useOnlineGame();
+  const { handleOnlineMove, handleOnlineRematch, handleYoutubeSync } = useOnlineGame();
 
   const handleRematch = async () => {
     if (mode === 'online') {
@@ -93,7 +93,7 @@ function GameScreen() {
 
       <ScorePanel />
 
-      <Board />
+      <Board onOnlineMove={handleOnlineMove} />
 
       {/* Rematch prompt when game ends (non-banner) */}
       {(status === 'won' || status === 'draw') && (

@@ -4,7 +4,6 @@ import { useGameStore } from '../store/gameStore';
 import { COLS, getLowestEmptyRow } from '../lib/gameLogic';
 import { Column } from './Column';
 import { useGame } from '../hooks/useGame';
-import { useOnlineGame } from '../hooks/useOnlineGame';
 import { resumeAudioContext } from '../lib/sounds';
 
 interface LastMove {
@@ -12,7 +11,11 @@ interface LastMove {
   row: number;
 }
 
-export function Board() {
+interface BoardProps {
+  onOnlineMove?: (col: number) => void;
+}
+
+export function Board({ onOnlineMove }: BoardProps) {
   const {
     board,
     currentPlayer,
@@ -20,20 +23,21 @@ export function Board() {
     winningCells,
     mode,
     myPlayer,
+    opponentConnected,
     isAIThinking,
     hoveredColumn,
     setHoveredColumn,
   } = useGameStore();
 
   const { handleColumnClick } = useGame();
-  const { handleOnlineMove } = useOnlineGame();
   const [lastMove, setLastMove] = useState<LastMove | null>(null);
 
   const isMyTurn = mode === 'online'
     ? myPlayer === currentPlayer
     : true;
 
-  const isActive = status === 'playing' && isMyTurn && !isAIThinking;
+  const isActive = status === 'playing' && isMyTurn && !isAIThinking &&
+    (mode !== 'online' || opponentConnected);
 
   const handleClick = useCallback((col: number) => {
     resumeAudioContext();
@@ -43,7 +47,7 @@ export function Board() {
       const row = getLowestEmptyRow(board, col);
       if (row !== null) {
         setLastMove({ col, row });
-        handleOnlineMove(col);
+        onOnlineMove?.(col);
       }
     } else {
       const row = getLowestEmptyRow(board, col);
@@ -52,7 +56,7 @@ export function Board() {
         handleColumnClick(col);
       }
     }
-  }, [isActive, mode, board, handleOnlineMove, handleColumnClick]);
+  }, [isActive, mode, board, onOnlineMove, handleColumnClick]);
 
   // Fix hover flicker: only clear hover if the leaving column is still active
   const handleHoverEnter = useCallback((col: number) => {

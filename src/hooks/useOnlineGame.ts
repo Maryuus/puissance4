@@ -26,7 +26,7 @@ export function useOnlineGame() {
   const syncFromRowRef = useRef<(row: GameRow) => void>(() => {});
 
   const syncFromRow = useCallback((row: GameRow) => {
-    const rowStatus = row.status === 'waiting' ? 'playing' : row.status;
+    const rowStatus = row.status === 'waiting' ? 'idle' : row.status;
     syncOnlineState({
       board: row.board,
       currentPlayer: row.current_player as Player,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MDCard, MDPlayer, PropertyColor,
@@ -373,6 +373,7 @@ export function MonopolyDealGame({
 }: Props) {
   const [movingWild, setMovingWild] = useState<{ cardId: string; fromColor: PropertyColor; validColors: PropertyColor[] } | null>(null);
   const [expandedOpponentId, setExpandedOpponentId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const myPlayer = room.players.find((p) => p.id === myPlayerId)!;
   const otherPlayers = room.players.filter((p) => p.id !== myPlayerId);
@@ -390,6 +391,13 @@ export function MonopolyDealGame({
     (pa?.type === 'payment' ? pa?.queue[0]?.playerId === myPlayerId : pa?.targetId === myPlayerId);
 
   const winner = room.winner_id ? room.players.find((p) => p.id === room.winner_id) : null;
+
+  // Auto-scroll to top when it's my turn to respond to a pending action
+  useEffect(() => {
+    if (isMyPaymentTurn || isMyStealTargetTurn || isMyJSNCounterTurn) {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [isMyPaymentTurn, isMyStealTargetTurn, isMyJSNCounterTurn]);
 
   function handleHandCardClick(card: MDCard) {
     if (isDiscardMode) { onDiscardCard(card); return; }
@@ -520,7 +528,7 @@ export function MonopolyDealGame({
       )}
 
       {/* ── Scrollable content ── */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 8 }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, padding: 8 }}>
 
         {/* Winner banner */}
         {room.status === 'finished' && winner && (
